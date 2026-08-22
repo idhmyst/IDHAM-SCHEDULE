@@ -5,7 +5,7 @@ import { DayName, DaySchedule, MeetingAgenda, ScheduleItem, ScheduleOverride, Ta
 import { ScheduleService } from './scheduleService';
 import { StorageService } from './storage';
 
-// In-app custom audio chime player for notif_ringtone.mp3
+// In-app custom audio player for notif_ringtone.mp3
 export const playNotificationRingtone = async () => {
   if (Platform.OS === 'web') return;
   try {
@@ -25,15 +25,22 @@ export const playNotificationRingtone = async () => {
   }
 };
 
+// Immediate physical vibration and ringtone trigger
+export const triggerAlarmSoundAndVibration = async () => {
+  if (Platform.OS !== 'web') {
+    try {
+      Vibration.vibrate([0, 600, 250, 600, 250, 900]);
+      await playNotificationRingtone();
+    } catch (e) {
+      console.log('Vibrate/audio error:', e);
+    }
+  }
+};
+
 Notifications.setNotificationHandler({
   handleNotification: async () => {
     // Explicit strong vibration and custom ringtone playback on arrival
-    if (Platform.OS !== 'web') {
-      try {
-        Vibration.vibrate([0, 600, 250, 600, 250, 900]);
-        playNotificationRingtone();
-      } catch (e) {}
-    }
+    await triggerAlarmSoundAndVibration();
     return {
       shouldShowAlert: true,
       shouldPlaySound: true,
@@ -273,11 +280,7 @@ export const NotificationService = {
       return;
     }
 
-    try {
-      Vibration.vibrate([0, 600, 250, 600, 250, 900]);
-      await playNotificationRingtone();
-    } catch (e) {}
-
+    await triggerAlarmSoundAndVibration();
     await this.requestPermissions();
     await Notifications.scheduleNotificationAsync({
       content: {

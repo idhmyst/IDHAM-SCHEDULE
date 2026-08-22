@@ -233,7 +233,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 <Text style={styles.cardLabel}>Waktu Pengingat Alarm</Text>
                 <Text style={styles.cardSub}>
                   {selectedOffsets.length > 0
-                    ? `Aktif: ${selectedOffsets.map(m => getReminderLabel(m)).join(', ')}`
+                    ? `Aktif (${selectedOffsets.length}): ${selectedOffsets.map(m => getReminderLabel(m)).join(', ')}`
                     : 'Tidak ada pengingat aktif (Mati)'}
                 </Text>
               </View>
@@ -247,6 +247,28 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 <Text style={styles.hamburgerText}>Filter Bar ({selectedOffsets.length})</Text>
               </TouchableOpacity>
             </View>
+
+            {/* Direct Quick Filtering Strip */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 4 }}>
+              {NOTIFICATION_FILTER_OPTIONS.map(opt => {
+                const isSelected = selectedOffsets.includes(opt.value);
+                return (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[
+                      styles.quickOffsetChip,
+                      isSelected && styles.activeQuickOffsetChip,
+                    ]}
+                    onPress={() => toggleOffsetOption(opt.value)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.quickOffsetBadge, isSelected && styles.activeQuickOffsetBadge]}>
+                      {isSelected ? '✓ ' : ''}{opt.badge}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
 
             <TouchableOpacity
               style={styles.testNotifBtn}
@@ -618,6 +640,28 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: 'bold',
     color: COLORS.primary,
+  },
+  quickOffsetChip: {
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginRight: 6,
+  },
+  activeQuickOffsetChip: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  quickOffsetBadge: {
+    fontSize: 11,
+    color: COLORS.textDark,
+    fontWeight: '600',
+  },
+  activeQuickOffsetBadge: {
+    color: COLORS.white,
+    fontWeight: 'bold',
   },
   testNotifBtn: {
     backgroundColor: COLORS.primaryLight,

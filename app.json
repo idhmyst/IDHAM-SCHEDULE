@@ -35,6 +35,17 @@
       "expo-asset",
       "expo-font",
       [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#D90000",
+          "sounds": [
+            "./assets/notification.mp3",
+            "./assets/notif_ringtone.mp3"
+          ]
+        }
+      ],
+      [
         "expo-updates",
         {
           "username": "idhambaihaqi"
