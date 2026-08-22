@@ -25,7 +25,8 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   const [period, setPeriod] = useState<'week' | 'month'>('month');
   const [insight, setInsight] = useState<InsightData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const [exportingPDF, setExportingPDF] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -41,9 +42,15 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   };
 
   const handleExportPDF = async () => {
-    setExporting(true);
+    setExportingPDF(true);
     await ReportService.exportAndSharePDF(period);
-    setExporting(false);
+    setExportingPDF(false);
+  };
+
+  const handleExportExcel = async () => {
+    setExportingExcel(true);
+    await ReportService.exportAndShareExcel();
+    setExportingExcel(false);
   };
 
   return (
@@ -56,7 +63,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
               <Text style={styles.headerIcon}>📊</Text>
               <View>
                 <Text style={styles.headerTitle}>Insight & Evaluasi Belajar</Text>
-                <Text style={styles.headerSub}>Presensi, Tugas, dan Laporan PDF</Text>
+                <Text style={styles.headerSub}>Presensi, Tugas, PDF & Excel</Text>
               </View>
             </View>
             <TouchableOpacity onPress={onClose}>
@@ -191,25 +198,41 @@ export const ReportModal: React.FC<ReportModalProps> = ({
             ) : null}
           </ScrollView>
 
-          {/* Action Footer: Export PDF */}
+          {/* Action Footer: Export PDF & Export Excel */}
           <View style={styles.footer}>
-            <TouchableOpacity
-              style={styles.exportBtn}
-              onPress={handleExportPDF}
-              disabled={exporting}
-              activeOpacity={0.8}
-            >
-              {exporting ? (
-                <ActivityIndicator color={COLORS.white} />
-              ) : (
-                <>
-                  <Text style={styles.exportBtnIcon}>📄</Text>
-                  <Text style={styles.exportBtnText}>
-                    Download & Bagikan Laporan (.PDF)
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
+            <View style={styles.exportRow}>
+              <TouchableOpacity
+                style={styles.exportPdfBtn}
+                onPress={handleExportPDF}
+                disabled={exportingPDF || exportingExcel}
+                activeOpacity={0.8}
+              >
+                {exportingPDF ? (
+                  <ActivityIndicator color={COLORS.white} size="small" />
+                ) : (
+                  <>
+                    <Text style={styles.exportBtnIcon}>📄</Text>
+                    <Text style={styles.exportBtnText}>Cetak (.PDF)</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.exportExcelBtn}
+                onPress={handleExportExcel}
+                disabled={exportingPDF || exportingExcel}
+                activeOpacity={0.8}
+              >
+                {exportingExcel ? (
+                  <ActivityIndicator color={COLORS.white} size="small" />
+                ) : (
+                  <>
+                    <Text style={styles.exportBtnIcon}>📗</Text>
+                    <Text style={styles.exportBtnText}>Unduh (.Excel)</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
 
             <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
               <Text style={styles.closeBtnText}>Tutup</Text>
@@ -457,17 +480,32 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingTop: 6,
   },
-  exportBtn: {
+  exportRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  exportPdfBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.primary,
     paddingVertical: 12,
     borderRadius: 12,
-    gap: 8,
+    gap: 6,
+  },
+  exportExcelBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#059669',
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 6,
   },
   exportBtnIcon: {
-    fontSize: 16,
+    fontSize: 15,
   },
   exportBtnText: {
     color: COLORS.white,

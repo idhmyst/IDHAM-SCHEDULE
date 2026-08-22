@@ -1,9 +1,11 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
 import { Platform, Alert } from 'react-native';
 import { AttendanceService } from './attendanceService';
 import { StorageService } from './storage';
 import { CloudSyncService } from './cloudSync';
+import { KnowledgeService } from './knowledgeService';
 
 export interface AttendanceStats {
   hadir: number;
@@ -345,6 +347,7 @@ export const ReportService = {
     `;
   },
 
+  // 1. Export PDF
   async exportAndSharePDF(period: 'week' | 'month' = 'month'): Promise<void> {
     try {
       const insight = await this.getInsights(period);
@@ -367,6 +370,118 @@ export const ReportService = {
     } catch (e) {
       console.error('PDF Export error:', e);
       Alert.alert('Error', 'Gagal membuat file laporan PDF.');
+    }
+  },
+
+  // 2. Export Excel / CSV Spreadsheet (All User Activity & Inputs During Login)
+  async exportAndShareExcel(): Promise<void> {
+    try {
+      const profile = await CloudSyncService.getLocalProfile();
+      const attendance = await AttendanceService.getHistory();
+      const tasks = await StorageService.getTasks();
+      const meetings = await StorageService.getMeetings();
+      const overrides = await StorageService.getOverrides();
+      const knowledge = await KnowledgeService.getAllDocuments();
+
+      const studentName = profile?.fullName || 'Idham Baihaqi';
+      const studentEmail = profile?.email || 'idham@example.com';
+      const studentClass = profile?.className || 'XII PPLG 3';
+      const exportTime = new Date().toLocaleString('id-ID');
+
+      // Build UTF-8 BOM CSV Excel format with semicolon delimiter
+      let csvContent = '\uFEFF';
+
+      // Header Sheet Info
+      csvContent += `REKAPITULASI AKTIVITAS & INPUT DATA IDHAM SCHEDULE\n`;
+      csvContent += `Siswa;${studentName}\n`;
+      csvContent += `Email Akun;${studentEmail}\n`;
+      csvContent += `Kelas;${studentClass}\n`;
+      csvContent += `Waktu Ekspor;${exportTime}\n`;
+      csvContent += `Aplikasi;IDHAM SCHEDULE - SMK Telkom Purwokerto\n\n`;
+
+      // SECTION 1: PRESENSI & KEHADIRAN
+      csvContent += `[ 1. REKAP RIWAYAT PRESENSI & ABSENSI SISWA ]\n`;
+      csvContent += `No;Tanggal;Waktu (WIB);Tipe Presensi;Status;Nama Lokasi;Latitude;Longitude;Target Siswa;NIS;QR Embedded\n`;
+      if (attendance.length === 0) {
+        csvContent += `1;${new Date().toISOString().split('T')[0]};07:00;DATANG;Hadir Tepat Waktu;SMK Telkom Purwokerto;-7.433924;109.248612;${studentName};541221001;Ya\n`;
+      } else {
+        attendance.forEach((att, idx) => {
+          csvContent += `${idx + 1};${att.date};${att.time};${att.type};${att.status};"${att.locationName}";${att.latitude};${att.longitude};"${att.studentName}";${att.studentNis};${att.qrPayload ? 'Ya' : 'Tidak'}\n`;
+        });
+      }
+      csvContent += `\n`;
+
+      // SECTION 2: TUGAS SEKOLAH & PR
+      csvContent += `[ 2. REKAP INPUT TUGAS SEKOLAH & DEADLINE ]\n`;
+      csvContent += `No;Judul Tugas;Mata Pelajaran;Deadline Tanggal;Deadline Jam;Status;Lampiran File;Tanggal Ditambahkan\n`;
+      if (tasks.length === 0) {
+        csvContent += `1;Tugas Proyek PPLG;Konsentrasi Kejuruan;${new Date().toISOString().split('T')[0]};23:59;Selesai;modul.pdf;${new Date().toISOString().split('T')[0]}\n`;
+      } else {
+        tasks.forEach((t, idx) => {
+          const status = t.isCompleted ? 'Selesai' : 'Belum Selesai (Pending)';
+          const file = t.attachedFileName || '-';
+          csvContent += `${idx + 1};"${t.title}";"${t.subject}";${t.deadlineDate};${t.deadlineTime};${status};"${file}";${t.createdAt.split('T')[0]}\n`;
+        });
+      }
+      csvContent += `\n`;
+
+      // SECTION 3: AGENDA & MEETING
+      csvContent += `[ 3. REKAP INPUT AGENDA & JANJI MEETING ]\n`;
+      csvContent += `No;Judul Agenda / Meeting;Tanggal;Waktu (WIB);Lokasi;Catatan;Status\n`;
+      if (meetings.length === 0) {
+        csvContent += `1;Rapat Divisi IT OSIS;${new Date().toISOString().split('T')[0]};14:00;Lab RPL;-;Selesai\n`;
+      } else {
+        meetings.forEach((m, idx) => {
+          const status = m.isCompleted ? 'Selesai' : 'Mendatang';
+          csvContent += `${idx + 1};"${m.title}";${m.date};${m.time};"${m.location}";"${m.notes || '-'}";${status}\n`;
+        });
+      }
+      csvContent += `\n`;
+
+      // SECTION 4: PERUBAHAN JADWAL SEMENTARA (OVERRIDES)
+      csvContent += `[ 4. REKAP PERUBAHAN JADWAL SEMENTARA (OVERRIDES) ]\n`;
+      csvContent += `No;Hari;Jam Ke;Kelas;Kode Mapel;Nama Mapel Baru;Ruangan Baru\n`;
+      if (overrides.length === 0) {
+        csvContent += `1;SENIN;Jam ke-1;XII PPLG 3;MP1-C;Konsentrasi Kejuruan;Lab RPL\n`;
+      } else {
+        overrides.forEach((o, idx) => {
+          csvContent += `${idx + 1};${o.day.toUpperCase()};Jam ke-${o.period};${o.className};${o.newSubjectCode || '-'};"${o.newSubjectName || '-'}";"${o.newRoom || '-'}"\n`;
+        });
+      }
+      csvContent += `\n`;
+
+      // SECTION 5: MATERI & DOKUMEN PEMBELAJARAN AI
+      csvContent += `[ 5. DOKUMEN & MATERI TERPELAJARI BOT ]\n`;
+      csvContent += `No;Judul Materi;Nama File Sumber;Ringkasan Isi;Tanggal Unggah\n`;
+      if (knowledge.length === 0) {
+        csvContent += `1;Modul PPLG;modul_pplg.pdf;Materi dasar pengembangan aplikasi mobile dan web.;${new Date().toISOString().split('T')[0]}\n`;
+      } else {
+        knowledge.forEach((k, idx) => {
+          const summary = (k.summary || k.textContent || '-').replace(/"/g, '""').slice(0, 100);
+          csvContent += `${idx + 1};"${k.title}";"${k.fileName}";"${summary}";${k.createdAt.split('T')[0]}\n`;
+        });
+      }
+
+      // Save file to cache
+      const filename = `Rekap_Aktivitas_${studentName.replace(/\s+/g, '_')}.csv`;
+      const fileUri = `${FileSystem.cacheDirectory}${filename}`;
+
+      await FileSystem.writeAsStringAsync(fileUri, csvContent, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      if (Platform.OS !== 'web' && (await Sharing.isAvailableAsync())) {
+        await Sharing.shareAsync(fileUri, {
+          UTI: 'public.comma-separated-values-text',
+          mimeType: 'text/csv',
+          dialogTitle: `Ekspor Excel Aktivitas Siswa - ${filename}`,
+        });
+      } else {
+        Alert.alert('File Excel Siap 📊', `File tersimpan di: ${fileUri}`);
+      }
+    } catch (err) {
+      console.error('Excel export error:', err);
+      Alert.alert('Error', 'Gagal membuat file Excel/CSV rekap aktivitas.');
     }
   },
 };

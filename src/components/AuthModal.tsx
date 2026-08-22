@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { CloudSyncService, UserProfile } from '../services/cloudSync';
+import { ReportService } from '../services/reportService';
 
 interface AuthModalProps {
   visible: boolean;
@@ -32,6 +33,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [className, setClassName] = useState('XII PPLG 3');
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
 
   useEffect(() => {
@@ -98,6 +100,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const ls = await CloudSyncService.getLastSyncTime();
     setLastSync(ls);
     Alert.alert('Pemulihan Data Cloud', res.message);
+  };
+
+  const handleExportExcel = async () => {
+    setExportingExcel(true);
+    await ReportService.exportAndShareExcel();
+    setExportingExcel(false);
   };
 
   const handleLogout = async () => {
@@ -170,7 +178,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   )}
                 </View>
 
-                {/* Sync Action Buttons */}
+                {/* Sync & Export Action Buttons */}
                 <View style={styles.syncActions}>
                   <TouchableOpacity
                     style={styles.syncBtn}
@@ -196,6 +204,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   >
                     <Text style={styles.restoreBtnIcon}>📥</Text>
                     <Text style={styles.restoreBtnText}>Pulihkan Data Dari Cloud</Text>
+                  </TouchableOpacity>
+
+                  {/* Excel Download Button */}
+                  <TouchableOpacity
+                    style={styles.excelBtn}
+                    onPress={handleExportExcel}
+                    disabled={exportingExcel}
+                    activeOpacity={0.8}
+                  >
+                    {exportingExcel ? (
+                      <ActivityIndicator size="small" color={COLORS.white} />
+                    ) : (
+                      <>
+                        <Text style={styles.excelBtnIcon}>📗</Text>
+                        <Text style={styles.excelBtnText}>
+                          Unduh Rekap Seluruh Inputan (.Excel / .CSV)
+                        </Text>
+                      </>
+                    )}
                   </TouchableOpacity>
                 </View>
               </View>
@@ -466,6 +493,23 @@ const styles = StyleSheet.create({
   },
   restoreBtnText: {
     color: COLORS.textDark,
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  excelBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#059669',
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 8,
+  },
+  excelBtnIcon: {
+    fontSize: 16,
+  },
+  excelBtnText: {
+    color: COLORS.white,
     fontWeight: 'bold',
     fontSize: 12,
   },
