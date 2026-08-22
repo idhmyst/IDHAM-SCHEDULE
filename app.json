@@ -12,7 +12,8 @@
       "backgroundColor": "#D90000"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.idham.schedule"
     },
     "android": {
       "adaptiveIcon": {
