@@ -10,6 +10,7 @@ import {
   Image,
   ActivityIndicator,
   Platform,
+  Modal,
 } from 'react-native';
 import * as Updates from 'expo-updates';
 import { COLORS } from '../constants/theme';
@@ -17,18 +18,23 @@ import { AVAILABLE_CLASSES } from '../data/masterSchedule';
 import { ScheduleOverride, UserSettings } from '../types';
 import { Header } from '../components/Header';
 import { StorageService } from '../services/storage';
-import { NotificationService } from '../services/notificationService';
+import { NotificationService, getReminderLabel } from '../services/notificationService';
 
 interface SettingsScreenProps {
   currentClass: string;
   onClassChange: (newClass: string) => void;
 }
 
-const NOTIFICATION_OPTIONS = [
-  { label: 'Nonaktif', value: 0 },
-  { label: '15 Menit', value: 15 },
-  { label: '30 Menit', value: 30 },
-  { label: '1 Jam', value: 60 },
+const NOTIFICATION_FILTER_OPTIONS = [
+  { label: '5 Menit Sebelum', value: 5, icon: '⏱️', badge: '5 Min' },
+  { label: '10 Menit Sebelum', value: 10, icon: '⏱️', badge: '10 Min' },
+  { label: '15 Menit Sebelum', value: 15, icon: '🔔', badge: '15 Min' },
+  { label: '30 Menit Sebelum', value: 30, icon: '🔔', badge: '30 Min' },
+  { label: '1 Jam Sebelum', value: 60, icon: '⏰', badge: '1 Jam' },
+  { label: '1 Hari Sebelum (H-1)', value: 1440, icon: '📅', badge: 'H-1' },
+  { label: '1 Minggu Sebelum (H-7)', value: 10080, icon: '🗓️', badge: 'H-7' },
+  { label: '1 Bulan Sebelum (H-30)', value: 43200, icon: '📆', badge: 'H-30' },
+  { label: 'Nonaktifkan Pengingat', value: 0, icon: '🔕', badge: 'Off' },
 ];
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
@@ -38,6 +44,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [overrides, setOverrides] = useState<ScheduleOverride[]>([]);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [showFilterDrawer, setShowFilterDrawer] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -66,11 +73,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       await StorageService.saveSettings(updated);
       setSettings(updated);
       await NotificationService.scheduleAllReminders();
+      setShowFilterDrawer(false);
+
+      const label = getReminderLabel(minutes);
       Alert.alert(
-        'Pengingat Diperbarui',
+        'Pengingat Diperbarui 🔔',
         minutes === 0
-          ? 'Notifikasi pengingat dinonaktifkan.'
-          : `Pengingat diatur ${minutes >= 60 ? '1 jam' : `${minutes} menit`} sebelum jadwal/meeting dimulai.`
+          ? 'Notifikasi alarm pengingat dinonaktifkan.'
+          : `Pengingat diatur berdering ${label} sebelum jadwal, meeting, atau deadline tugas!`
       );
     }
   };
@@ -134,6 +144,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     ]);
   };
 
+  const currentMinutes = settings?.notifyBeforeMinutes ?? 30;
+  const currentOption =
+    NOTIFICATION_FILTER_OPTIONS.find(opt => opt.value === currentMinutes) ||
+    NOTIFICATION_FILTER_OPTIONS[3];
+
   return (
     <SafeAreaView style={styles.container}>
       <Header
@@ -178,35 +193,35 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* Section: Filter Pengingat / Notifikasi */}
+        {/* Section: Hamburger Filtering Bar Pengingat / Notifikasi */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>PENGINGAT & NOTIFIKASI JADWAL</Text>
+          <Text style={styles.sectionTitle}>PENGINGAT & FILTER NOTIFIKASI</Text>
           <Text style={styles.sectionSubtitle}>
-            Atur waktu notifikasi muncul sebelum jam mata pelajaran atau agenda meeting dimulai:
+            Klik Filtering Bar di bawah untuk memilih interval waktu pengingat berbunyi:
           </Text>
 
-          <View style={styles.optionsRow}>
-            {NOTIFICATION_OPTIONS.map(opt => {
-              const isSelected = (settings?.notifyBeforeMinutes ?? 30) === opt.value;
-              return (
-                <TouchableOpacity
-                  key={opt.value}
-                  style={[styles.optionChip, isSelected && styles.selectedOptionChip]}
-                  onPress={() => handleSelectNotificationOffset(opt.value)}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[styles.optionChipText, isSelected && styles.selectedOptionChipText]}
-                  >
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          {/* Filtering Bar Menu */}
+          <TouchableOpacity
+            style={styles.filteringBar}
+            onPress={() => setShowFilterDrawer(true)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.hamburgerIconContainer}>
+              <Text style={styles.hamburgerIcon}>☰</Text>
+            </View>
+            <View style={styles.filterBarInfo}>
+              <Text style={styles.filterBarLabel}>Interval Pengingat Aktif</Text>
+              <Text style={styles.filterBarValue}>
+                {currentOption.icon} {currentOption.label}
+              </Text>
+            </View>
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>{currentOption.badge}</Text>
+            </View>
+          </TouchableOpacity>
 
           <TouchableOpacity style={styles.testNotifBtn} onPress={handleTestNotification}>
-            <Text style={styles.testNotifText}>🔔 Tes Bunyikan Notifikasi Sekarang</Text>
+            <Text style={styles.testNotifText}>🔔 Tes Ringtone & Getar Notifikasi</Text>
           </TouchableOpacity>
         </View>
 
@@ -275,6 +290,72 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Hamburger Filtering Drawer Modal */}
+      <Modal visible={showFilterDrawer} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalDrawer}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalTitleRow}>
+                <Text style={styles.modalIcon}>☰</Text>
+                <Text style={styles.modalTitle}>Pilih Interval Pengingat Notifikasi</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowFilterDrawer(false)}>
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.drawerList} showsVerticalScrollIndicator={false}>
+              {NOTIFICATION_FILTER_OPTIONS.map(option => {
+                const isSelected = currentMinutes === option.value;
+                return (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[styles.drawerItem, isSelected && styles.selectedDrawerItem]}
+                    onPress={() => handleSelectNotificationOffset(option.value)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.drawerItemLeft}>
+                      <Text style={styles.drawerItemIcon}>{option.icon}</Text>
+                      <Text
+                        style={[
+                          styles.drawerItemLabel,
+                          isSelected && styles.selectedDrawerItemLabel,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </View>
+
+                    <View
+                      style={[
+                        styles.drawerBadge,
+                        isSelected && styles.selectedDrawerBadge,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.drawerBadgeText,
+                          isSelected && styles.selectedDrawerBadgeText,
+                        ]}
+                      >
+                        {option.badge}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.closeDrawerBtn}
+              onPress={() => setShowFilterDrawer(false)}
+            >
+              <Text style={styles.closeDrawerBtnText}>Tutup Menu Filter</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -356,31 +437,57 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: 'bold',
   },
-  optionsRow: {
+  filteringBar: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
-  },
-  optionChip: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: COLORS.background,
-    borderWidth: 1,
-    borderColor: COLORS.border,
     alignItems: 'center',
+    backgroundColor: COLORS.background,
+    borderWidth: 1.5,
+    borderColor: COLORS.primaryBadge,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+    gap: 10,
   },
-  selectedOptionChip: {
+  hamburgerIconContainer: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
     backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  optionChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textDark,
-  },
-  selectedOptionChipText: {
+  hamburgerIcon: {
     color: COLORS.white,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  filterBarInfo: {
+    flex: 1,
+  },
+  filterBarLabel: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  filterBarValue: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+    marginTop: 2,
+  },
+  filterBadge: {
+    backgroundColor: COLORS.primaryLight,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.primaryBadge,
+  },
+  filterBadgeText: {
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: 'bold',
   },
   testNotifBtn: {
     backgroundColor: COLORS.primaryLight,
@@ -471,5 +578,116 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontWeight: 'bold',
     fontSize: 13,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalDrawer: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+    marginBottom: 10,
+  },
+  modalTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  modalIcon: {
+    fontSize: 18,
+    color: COLORS.primary,
+    fontWeight: 'bold',
+  },
+  modalTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: COLORS.textDark,
+  },
+  modalCloseText: {
+    fontSize: 18,
+    color: COLORS.textMuted,
+    fontWeight: 'bold',
+    padding: 4,
+  },
+  drawerList: {
+    marginVertical: 6,
+  },
+  drawerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginBottom: 6,
+    backgroundColor: COLORS.background,
+  },
+  selectedDrawerItem: {
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.primaryBadge,
+  },
+  drawerItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  drawerItemIcon: {
+    fontSize: 16,
+  },
+  drawerItemLabel: {
+    fontSize: 13,
+    color: COLORS.textDark,
+    fontWeight: '600',
+  },
+  selectedDrawerItemLabel: {
+    color: COLORS.primary,
+    fontWeight: 'bold',
+  },
+  drawerBadge: {
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  selectedDrawerBadge: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  drawerBadgeText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontWeight: 'bold',
+  },
+  selectedDrawerBadgeText: {
+    color: COLORS.white,
+  },
+  closeDrawerBtn: {
+    backgroundColor: COLORS.background,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  closeDrawerBtnText: {
+    color: COLORS.textMuted,
+    fontWeight: '600',
   },
 });

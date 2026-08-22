@@ -27,6 +27,25 @@ interface OverrideModalProps {
   onSave: (override: ScheduleOverride) => void;
 }
 
+const DAYS_LIST: { key: DayName; label: string }[] = [
+  { key: 'senin', label: 'Senin' },
+  { key: 'selasa', label: 'Selasa' },
+  { key: 'rabu', label: 'Rabu' },
+  { key: 'kamis', label: 'Kamis' },
+  { key: 'jumat', label: 'Jumat' },
+];
+
+const PERIOD_LIST = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+
+const QUICK_PRESETS = [
+  { name: 'Bimbingan Konseling', code: 'BK', room: 'B.3.2' },
+  { name: 'Jam Kosong / Free Class', code: 'FREE', room: 'Kelas' },
+  { name: 'Praktik Lab RPL', code: 'MP1-C', room: 'Lab RPL 2' },
+  { name: 'Upacara / Apel Pagi', code: 'UPACARA', room: 'Lapangan' },
+  { name: 'Senam & Olahraga', code: 'SENAM', room: 'Lapangan' },
+  { name: 'Kewirausahaan (PKK)', code: 'PKK-2', room: 'RPS UTR' },
+];
+
 export const OverrideModal: React.FC<OverrideModalProps> = ({
   visible,
   className,
@@ -35,7 +54,7 @@ export const OverrideModal: React.FC<OverrideModalProps> = ({
   onSave,
 }) => {
   const [day, setDay] = useState<DayName>('senin');
-  const [period, setPeriod] = useState('1');
+  const [period, setPeriod] = useState(1);
   const [subjectName, setSubjectName] = useState('');
   const [subjectCode, setSubjectCode] = useState('');
   const [room, setRoom] = useState('');
@@ -46,13 +65,13 @@ export const OverrideModal: React.FC<OverrideModalProps> = ({
     if (visible) {
       if (initialData) {
         setDay(initialData.day || 'senin');
-        setPeriod(initialData.period ? initialData.period.toString() : '1');
+        setPeriod(initialData.period || 1);
         setSubjectName(initialData.currentSubject || '');
         setRoom(initialData.currentRoom || '');
         setNote(initialData.note || '');
       } else {
         setDay('senin');
-        setPeriod('1');
+        setPeriod(1);
         setSubjectName('');
         setSubjectCode('');
         setRoom('');
@@ -61,20 +80,19 @@ export const OverrideModal: React.FC<OverrideModalProps> = ({
     }
   }, [visible, initialData]);
 
-  const daysList: { key: DayName; label: string }[] = [
-    { key: 'senin', label: 'Senin' },
-    { key: 'selasa', label: 'Selasa' },
-    { key: 'rabu', label: 'Rabu' },
-    { key: 'kamis', label: 'Kamis' },
-    { key: 'jumat', label: 'Jumat' },
-  ];
+  const handleApplyPreset = (preset: { name: string; code: string; room: string }) => {
+    setSubjectName(preset.name);
+    setSubjectCode(preset.code);
+    setRoom(preset.room);
+    setNote(`Diubah ke ${preset.name}`);
+  };
 
   const handleSave = () => {
     const override: ScheduleOverride = {
       id: Date.now().toString(),
       className,
       day,
-      period: parseInt(period, 10) || 1,
+      period,
       newSubjectName: subjectName.trim() || undefined,
       newSubjectCode: subjectCode.trim() || undefined,
       newRoom: room.trim() || undefined,
@@ -94,69 +112,104 @@ export const OverrideModal: React.FC<OverrideModalProps> = ({
       >
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>✏️ Ubah / Override Jadwal Kelas</Text>
+            <Text style={styles.headerTitle}>✏️ Ubah / Override Jadwal Pelajaran</Text>
             <TouchableOpacity onPress={onClose}>
               <Text style={styles.closeText}>✕</Text>
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.body}>
-            <Text style={styles.label}>Pilih Hari</Text>
-            <View style={styles.daySelector}>
-              {daysList.map(d => (
+          <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
+            {/* 1. Pilih Hari (Interactive Buttons) */}
+            <Text style={styles.label}>1. Pilih Hari</Text>
+            <View style={styles.chipsRow}>
+              {DAYS_LIST.map(d => (
                 <TouchableOpacity
                   key={d.key}
-                  style={[styles.dayChip, day === d.key && styles.activeDayChip]}
+                  style={[styles.chipButton, day === d.key && styles.activeChipButton]}
                   onPress={() => setDay(d.key)}
+                  activeOpacity={0.7}
                 >
-                  <Text style={[styles.dayChipText, day === d.key && styles.activeDayChipText]}>
+                  <Text
+                    style={[styles.chipButtonText, day === d.key && styles.activeChipButtonText]}
+                  >
                     {d.label}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            <Text style={styles.label}>Jam ke (1 - 11)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Contoh: 3"
-              placeholderTextColor={COLORS.textLight}
-              keyboardType="number-pad"
-              value={period}
-              onChangeText={setPeriod}
-            />
+            {/* 2. Pilih Jam ke- (Interactive Buttons 1-11) */}
+            <Text style={styles.label}>2. Pilih Jam Pelajaran ke-</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.periodRow}>
+              {PERIOD_LIST.map(p => (
+                <TouchableOpacity
+                  key={p}
+                  style={[styles.periodChip, period === p && styles.activePeriodChip]}
+                  onPress={() => setPeriod(p)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[styles.periodChipText, period === p && styles.activePeriodChipText]}
+                  >
+                    Jam {p}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
 
-            <Text style={styles.label}>Nama Mapel</Text>
+            {/* 3. Preset Cepat (Quick Tap) */}
+            <Text style={styles.label}>3. Opsi Cepat (Sekali Pencet)</Text>
+            <View style={styles.presetWrap}>
+              {QUICK_PRESETS.map((item, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.presetChip}
+                  onPress={() => handleApplyPreset(item)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.presetChipText}>⚡ {item.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* 4. Form Rincian Mapel & Ruangan */}
+            <Text style={styles.label}>4. Nama Mata Pelajaran</Text>
             <TextInput
               style={styles.input}
-              placeholder="Contoh: Bimbingan Konseling / Free / Praktik"
+              placeholder="Contoh: Bimbingan Konseling / Free Class / Praktik"
               placeholderTextColor={COLORS.textLight}
               value={subjectName}
               onChangeText={setSubjectName}
             />
 
-            <Text style={styles.label}>Kode Mapel Baru (Opsional)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Contoh: BK-2, FREE, PRAKTIK"
-              placeholderTextColor={COLORS.textLight}
-              value={subjectCode}
-              onChangeText={setSubjectCode}
-            />
+            <View style={styles.row}>
+              <View style={styles.col}>
+                <Text style={styles.label}>Kode Mapel</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="BK-2 / FREE"
+                  placeholderTextColor={COLORS.textLight}
+                  value={subjectCode}
+                  onChangeText={setSubjectCode}
+                />
+              </View>
 
-            <Text style={styles.label}>Ruangan Kelas</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Contoh: Lab RPL 2 / RPS UTR / B.3.2"
-              placeholderTextColor={COLORS.textLight}
-              value={room}
-              onChangeText={setRoom}
-            />
+              <View style={styles.col}>
+                <Text style={styles.label}>Ruangan Kelas</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Lab RPL 2 / B.3.2"
+                  placeholderTextColor={COLORS.textLight}
+                  value={room}
+                  onChangeText={setRoom}
+                />
+              </View>
+            </View>
 
-            <Text style={styles.label}>Alasan / Keterangan Perubahan</Text>
+            <Text style={styles.label}>Alasan / Catatan Perubahan</Text>
             <TextInput
               style={styles.input}
-              placeholder="Contoh: Guru berhalangan hadir / Pindah lab"
+              placeholder="Contoh: Guru tugas luar / Pindah lab"
               placeholderTextColor={COLORS.textLight}
               value={note}
               onChangeText={setNote}
@@ -169,7 +222,7 @@ export const OverrideModal: React.FC<OverrideModalProps> = ({
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-              <Text style={styles.saveBtnText}>Terapkan Perubahan</Text>
+              <Text style={styles.saveBtnText}>Terapkan Jadwal</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -188,14 +241,14 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '85%',
+    maxHeight: '90%',
     padding: 20,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
@@ -215,34 +268,80 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textBody,
+    fontWeight: '700',
+    color: COLORS.textDark,
     marginBottom: 6,
     marginTop: 10,
   },
-  daySelector: {
+  chipsRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
   },
-  dayChip: {
+  chipButton: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+  },
+  activeChipButton: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  chipButtonText: {
+    fontSize: 12,
+    color: COLORS.textBody,
+    fontWeight: '600',
+  },
+  activeChipButtonText: {
+    color: COLORS.white,
+    fontWeight: 'bold',
+  },
+  periodRow: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingVertical: 4,
+  },
+  periodChip: {
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: 10,
     backgroundColor: COLORS.background,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  activeDayChip: {
+  activePeriodChip: {
     backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
-  dayChipText: {
+  periodChipText: {
     fontSize: 12,
-    color: COLORS.textBody,
+    color: COLORS.textDark,
     fontWeight: '600',
   },
-  activeDayChipText: {
+  activePeriodChipText: {
     color: COLORS.white,
+    fontWeight: 'bold',
+  },
+  presetWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  presetChip: {
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.primaryBadge,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  presetChipText: {
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: '700',
   },
   input: {
     backgroundColor: COLORS.background,
@@ -250,9 +349,16 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
+    paddingVertical: 9,
+    fontSize: 13,
     color: COLORS.textDark,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  col: {
+    flex: 1,
   },
   footer: {
     flexDirection: 'row',

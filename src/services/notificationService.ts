@@ -1,6 +1,5 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { Audio } from 'expo-av';
 import { DayName, DaySchedule, MeetingAgenda, ScheduleItem, TaskAssignment } from '../types';
 import { ScheduleService } from './scheduleService';
 import { StorageService } from './storage';
@@ -21,6 +20,17 @@ const DAY_INDEX_MAP: { [key in DayName]: number } = {
   kamis: 5,
   jumat: 6,
   sabtu: 7,
+};
+
+export const getReminderLabel = (minutes: number): string => {
+  if (minutes <= 0) return 'Nonaktif';
+  if (minutes < 60) return `${minutes} menit lagi`;
+  if (minutes === 60) return '1 jam lagi';
+  if (minutes < 1440) return `${Math.round(minutes / 60)} jam lagi`;
+  if (minutes === 1440) return '1 hari lagi (H-1)';
+  if (minutes === 10080) return '1 minggu lagi (H-7)';
+  if (minutes >= 43200) return '1 bulan lagi (H-30)';
+  return `${Math.round(minutes / 1440)} hari lagi`;
 };
 
 export const NotificationService = {
@@ -48,6 +58,9 @@ export const NotificationService = {
         sound: 'default',
         enableVibrate: true,
         enableLights: true,
+        bypassDnd: true,
+        showBadge: true,
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       });
 
       await Notifications.setNotificationChannelAsync('task-reminders', {
@@ -58,6 +71,9 @@ export const NotificationService = {
         sound: 'default',
         enableVibrate: true,
         enableLights: true,
+        bypassDnd: true,
+        showBadge: true,
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       });
     }
 
@@ -79,6 +95,7 @@ export const NotificationService = {
 
     const currentClass = settings.defaultClass || 'XII PPLG 3';
     const days: DayName[] = ['senin', 'selasa', 'rabu', 'kamis', 'jumat'];
+    const reminderText = getReminderLabel(minutesBefore);
 
     // 1. Schedule Weekly Class Reminders
     for (const day of days) {
@@ -91,10 +108,10 @@ export const NotificationService = {
         const [startH, startM] = item.startTime.split(':').map(Number);
         if (isNaN(startH) || isNaN(startM)) continue;
 
-        let targetMinute = startM - minutesBefore;
-        let targetHour = startH;
+        let targetMinute = startM - (minutesBefore % 60);
+        let targetHour = startH - Math.floor(minutesBefore / 60);
 
-        if (targetMinute < 0) {
+        while (targetMinute < 0) {
           targetMinute += 60;
           targetHour -= 1;
         }
@@ -102,16 +119,12 @@ export const NotificationService = {
         if (targetHour < 0) continue;
 
         const weekday = DAY_INDEX_MAP[day];
-        const reminderText =
-          minutesBefore >= 60
-            ? `1 jam lagi (${item.startTime} WIB)`
-            : `${minutesBefore} menit lagi (${item.startTime} WIB)`;
 
         try {
           await Notifications.scheduleNotificationAsync({
             content: {
               title: `🔔 Mapel Berikutnya: ${item.subjectCode} (${item.subjectName})`,
-              body: `Mulai ${reminderText} di Ruang ${item.room}. Jangan sampai terlambat!`,
+              body: `Mulai ${reminderText} (${item.startTime} WIB) di Ruang ${item.room}. Jangan terlambat!`,
               sound: 'default',
               vibrate: [0, 500, 250, 500],
               data: { type: 'schedule', itemId: item.id },
@@ -145,16 +158,11 @@ export const NotificationService = {
       const triggerDate = new Date(meetingDate.getTime() - minutesBefore * 60 * 1000);
 
       if (triggerDate > now) {
-        const reminderText =
-          minutesBefore >= 60
-            ? `1 jam lagi (${meeting.time} WIB)`
-            : `${minutesBefore} menit lagi (${meeting.time} WIB)`;
-
         try {
           await Notifications.scheduleNotificationAsync({
             content: {
               title: `📌 Agenda Meeting: ${meeting.title}`,
-              body: `Mulai ${reminderText} di ${meeting.location}.`,
+              body: `Mulai ${reminderText} (${meeting.time} WIB) di ${meeting.location}.`,
               sound: 'default',
               vibrate: [0, 500, 250, 500],
               data: { type: 'meeting', meetingId: meeting.id },
@@ -188,16 +196,11 @@ export const NotificationService = {
           ? `(File lampiran: ${task.attachedFileName} sudah siap)`
           : `(Segera kumpulkan file tugas!)`;
 
-        const reminderText =
-          minutesBefore >= 60
-            ? `1 jam lagi (${task.deadlineTime} WIB)`
-            : `${minutesBefore} menit lagi (${task.deadlineTime} WIB)`;
-
         try {
           await Notifications.scheduleNotificationAsync({
             content: {
               title: `⚠️ Deadline Tugas: ${task.title} [${task.subject}]`,
-              body: `Batas pengumpulan ${reminderText}. ${fileStatus}`,
+              body: `Batas pengumpulan ${reminderText} (${task.deadlineTime} WIB). ${fileStatus}`,
               sound: 'default',
               vibrate: [0, 500, 250, 500],
               data: { type: 'task', taskId: task.id },
@@ -216,7 +219,7 @@ export const NotificationService = {
 
   async sendInstantTestNotification(): Promise<void> {
     if (Platform.OS === 'web') {
-      alert('🔔 [TEST NOTIFIKASI] Pengingat jadwal dan deadline tugas aktif dengan bunyi alarm!');
+      alert('🔔 [TEST NOTIFIKASI] Pengingat berbunyi! Alarm notifikasi aktif.');
       return;
     }
 

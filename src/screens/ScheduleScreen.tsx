@@ -217,6 +217,22 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
           </View>
         )}
 
+        {/* Quick Edit Schedule Action Bar */}
+        <TouchableOpacity
+          style={styles.quickOverrideBtn}
+          onPress={() => {
+            setSelectedItemForEdit(null);
+            setShowOverrideModal(true);
+          }}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.quickOverrideIcon}>✏️</Text>
+          <Text style={styles.quickOverrideText}>
+            Ubah / Sesuaikan Jadwal Hari {selectedDay.toUpperCase()}
+          </Text>
+          <Text style={styles.quickOverrideArrow}>➔</Text>
+        </TouchableOpacity>
+
         {/* Agendas for this specific date */}
         {dayTasks.length > 0 && (
           <View style={styles.sectionAgenda}>
@@ -423,6 +439,33 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.textDark,
+  },
+  quickOverrideBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    marginHorizontal: 16,
+    marginTop: 6,
+    marginBottom: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 8,
+  },
+  quickOverrideIcon: {
+    fontSize: 14,
+  },
+  quickOverrideText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+  },
+  quickOverrideArrow: {
+    fontSize: 12,
+    color: COLORS.textMuted,
   },
   sectionAgenda: {
     marginHorizontal: 16,
