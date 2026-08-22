@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Platform } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { CloudSyncService } from '../services/cloudSync';
 
@@ -54,23 +54,30 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <View style={styles.container}>
       <View style={styles.topRow}>
+        {/* Left: Brand / Logo + Dynamic Greeting & Status */}
         <View style={styles.brandContainer}>
-          <Image
-            source={require('../../assets/icon.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <View>
-            <Text style={styles.title}>{headerTitle}</Text>
+          <View style={styles.logoWrapper}>
+            <Image
+              source={require('../../assets/icon.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+          </View>
+          <View style={styles.titleWrapper}>
+            <Text style={styles.title} numberOfLines={1}>
+              {headerTitle}
+            </Text>
             <View style={styles.statusRow}>
               <View style={styles.onlineDot} />
-              <Text style={styles.statusText}>{subtitle}</Text>
+              <Text style={styles.statusText} numberOfLines={1}>
+                {subtitle}
+              </Text>
             </View>
           </View>
         </View>
 
+        {/* Right: Actions (IDHAM AI, Absen, & Class Badge) */}
         <View style={styles.rightButtons}>
-          {/* IDHAM AI Voice Command Button */}
           {onVoiceAIPress && (
             <TouchableOpacity
               style={styles.voiceBtn}
@@ -81,7 +88,6 @@ export const Header: React.FC<HeaderProps> = ({
             </TouchableOpacity>
           )}
 
-          {/* Quick Attendance Pill */}
           {onAttendancePress && (
             <TouchableOpacity
               style={styles.absenBadge}
@@ -92,8 +98,11 @@ export const Header: React.FC<HeaderProps> = ({
             </TouchableOpacity>
           )}
 
-          {/* Class Pill */}
-          <TouchableOpacity style={styles.classBadge} onPress={onClassPress} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={styles.classBadge}
+            onPress={onClassPress}
+            activeOpacity={0.8}
+          >
             <Text style={styles.classText}>{currentClass}</Text>
           </TouchableOpacity>
         </View>
@@ -105,16 +114,16 @@ export const Header: React.FC<HeaderProps> = ({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: COLORS.primary,
-    paddingTop: 46,
+    paddingTop: Platform.OS === 'android' ? 40 : 48,
     paddingBottom: 14,
-    paddingHorizontal: 14,
-    borderBottomLeftRadius: 22,
-    borderBottomRightRadius: 22,
+    paddingHorizontal: 16,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
     elevation: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
   },
   topRow: {
     flexDirection: 'row',
@@ -126,22 +135,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     flex: 1,
+    marginRight: 8,
   },
-  logo: {
+  logoWrapper: {
     width: 38,
     height: 38,
-    borderRadius: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  logo: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+  },
+  titleWrapper: {
+    flex: 1,
+    justifyContent: 'center',
   },
   title: {
     color: COLORS.white,
     fontSize: 15,
-    fontWeight: 'bold',
-    letterSpacing: 0.3,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     marginTop: 2,
   },
   onlineDot: {
@@ -151,15 +175,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#4ADE80',
   },
   statusText: {
-    color: COLORS.white,
-    opacity: 0.9,
-    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.88)',
+    fontSize: 10.5,
     fontWeight: '500',
   },
   rightButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
   },
   voiceBtn: {
     width: 32,
@@ -173,32 +196,33 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   voiceIcon: {
-    fontSize: 14,
+    fontSize: 13,
   },
   absenBadge: {
     backgroundColor: '#059669',
-    paddingHorizontal: 9,
+    paddingHorizontal: 8,
     paddingVertical: 5,
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#34D399',
+    elevation: 2,
   },
   absenText: {
     color: COLORS.white,
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: 'bold',
   },
   classBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
     paddingHorizontal: 9,
     paddingVertical: 5,
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.35)',
   },
   classText: {
     color: COLORS.white,
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 10.5,
+    fontWeight: '700',
   },
 });
