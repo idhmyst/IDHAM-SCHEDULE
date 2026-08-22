@@ -13,12 +13,13 @@ import * as Updates from 'expo-updates';
 import { COLORS } from './src/constants/theme';
 import { ChatScreen } from './src/screens/ChatScreen';
 import { ScheduleScreen } from './src/screens/ScheduleScreen';
+import { AttendanceScreen } from './src/screens/AttendanceScreen';
 import { MeetingScreen } from './src/screens/MeetingScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { StorageService } from './src/services/storage';
 import { NotificationService } from './src/services/notificationService';
 
-type TabName = 'chat' | 'schedule' | 'meeting' | 'settings';
+type TabName = 'chat' | 'schedule' | 'attendance' | 'meeting' | 'settings';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabName>('chat');
@@ -79,6 +80,13 @@ export default function App() {
             onOpenSettings={() => setActiveTab('settings')}
           />
         );
+      case 'attendance':
+        return (
+          <AttendanceScreen
+            currentClass={currentClass}
+            onOpenSettings={() => setActiveTab('settings')}
+          />
+        );
       case 'meeting':
         return (
           <MeetingScreen
@@ -103,7 +111,7 @@ export default function App() {
       <StatusBar style="light" backgroundColor={COLORS.primaryDark} />
       <View style={styles.screenContainer}>{renderCurrentScreen()}</View>
 
-      {/* Bottom Navigation Bar */}
+      {/* Bottom Navigation Bar with 5 Prominent Tabs */}
       <SafeAreaView style={styles.bottomNavSafe}>
         <View style={styles.bottomNav}>
           <TouchableOpacity
@@ -142,6 +150,25 @@ export default function App() {
             </Text>
           </TouchableOpacity>
 
+          {/* 📍 Tab Absensi Mandiri Digits Telkom */}
+          <TouchableOpacity
+            style={styles.navItem}
+            onPress={() => setActiveTab('attendance')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.iconWrapper, activeTab === 'attendance' && styles.activeIconWrapper]}>
+              <Text style={styles.navIcon}>📍</Text>
+            </View>
+            <Text
+              style={[
+                styles.navLabel,
+                activeTab === 'attendance' && styles.activeNavLabel,
+              ]}
+            >
+              Absensi
+            </Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.navItem}
             onPress={() => setActiveTab('meeting')}
@@ -156,7 +183,7 @@ export default function App() {
                 activeTab === 'meeting' && styles.activeNavLabel,
               ]}
             >
-              Tugas & Agenda
+              Tugas
             </Text>
           </TouchableOpacity>
 
@@ -193,19 +220,16 @@ const styles = StyleSheet.create({
   },
   bottomNavSafe: {
     backgroundColor: COLORS.white,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
   },
   bottomNav: {
     flexDirection: 'row',
+    height: 60,
     backgroundColor: COLORS.white,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingHorizontal: 4,
   },
   navItem: {
     flex: 1,
@@ -214,12 +238,11 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   iconWrapper: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 2,
+    borderRadius: 14,
   },
   activeIconWrapper: {
     backgroundColor: COLORS.primaryLight,
@@ -228,9 +251,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   navLabel: {
-    fontSize: 11,
-    color: COLORS.textMuted,
+    fontSize: 10,
     fontWeight: '600',
+    color: COLORS.textMuted,
+    marginTop: 2,
   },
   activeNavLabel: {
     color: COLORS.primary,
