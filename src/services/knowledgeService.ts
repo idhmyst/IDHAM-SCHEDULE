@@ -4,6 +4,10 @@ import { KnowledgeDocument } from '../types';
 import { StorageService } from './storage';
 
 export const KnowledgeService = {
+  async getAllDocuments(): Promise<KnowledgeDocument[]> {
+    return StorageService.getKnowledgeDocs();
+  },
+
   async pickAndLearnDocument(): Promise<KnowledgeDocument | null> {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -43,7 +47,7 @@ export const KnowledgeService = {
       await StorageService.saveKnowledgeDoc(newDoc);
       return newDoc;
     } catch (err) {
-      console.error('Error picking and learning document:', err);
+      console.error('Error learning document', err);
       return null;
     }
   },

@@ -22,6 +22,8 @@ import { TaskModal } from '../components/TaskModal';
 import { KnowledgeModal } from '../components/KnowledgeModal';
 import { OverrideModal } from '../components/OverrideModal';
 import { AttendanceModal } from '../components/AttendanceModal';
+import { ReportModal } from '../components/ReportModal';
+import { AuthModal } from '../components/AuthModal';
 import { generateBotResponse } from '../bot/responseFormatter';
 import { StorageService } from '../services/storage';
 import { NotificationService } from '../services/notificationService';
@@ -43,6 +45,8 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
   const [showOverrideModal, setShowOverrideModal] = useState(false);
   const [overrideModalData, setOverrideModalData] = useState<any>(null);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const flatListRef = useRef<FlatList>(null);
 
@@ -58,9 +62,9 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
       const welcomeMsg: ChatMessage = {
         id: '1',
         sender: 'bot',
-        text: `Halo Idham! 👋\n\nSaya asisten jadwal & tugas offline untuk kelas **${currentClass}** (SMK Telkom Purwokerto).\n\n• Tanyakan jadwal kelas & ruangan.\n• Catat tugas sekolah dan lampirkan filenya.\n• Lakukan presensi mandiri (Absen Masuk/Pulang).\n• Upload file materi/catatan dengan tombol 📎 agar saya pelajari!`,
+        text: `Halo Idham! 👋\n\nSaya asisten jadwal, tugas & presensi offline untuk kelas **${currentClass}** (SMK Telkom Purwokerto).\n\n• Tanyakan jadwal kelas & ruangan.\n• Lakukan presensi mandiri (Absen Masuk/Pulang).\n• Cek insight kehadiran bulanan & download laporan PDF.\n• Masuk ke Akun Cloud Supabase agar data tidak hilang!`,
         timestamp: formatCurrentTime(),
-        quickReplies: ['📅 Jadwal Hari Ini', '📍 Absen Online', '📝 Daftar Tugas', '👕 Seragam Hari Ini'],
+        quickReplies: ['📅 Jadwal Hari Ini', '📊 Insight & PDF', '📍 Absen Online', '📝 Daftar Tugas', '☁️ Akun Cloud'],
       };
       setMessages([welcomeMsg]);
       await StorageService.saveChats([welcomeMsg]);
@@ -101,7 +105,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
         text: botRes.text,
         timestamp: formatCurrentTime(),
         quickReplies: botRes.quickReplies,
-        actionType: botRes.actionType,
+        actionType: (botRes.actionType as any) || 'general',
       };
 
       const updated = [...newMessages, botMsg];
@@ -120,6 +124,10 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
         setShowOverrideModal(true);
       } else if (botRes.openModal === 'attendance') {
         setShowAttendanceModal(true);
+      } else if (botRes.openModal === 'report') {
+        setShowReportModal(true);
+      } else if (botRes.openModal === 'auth') {
+        setShowAuthModal(true);
       }
     } catch (e) {
       console.error(e);
@@ -216,6 +224,10 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
               onQuickReplyPress={reply => {
                 if (reply === '📍 Buka Menu Presensi' || reply === '📍 Absen Online') {
                   setShowAttendanceModal(true);
+                } else if (reply === '📄 Buka Laporan PDF' || reply === '📊 Insight & PDF') {
+                  setShowReportModal(true);
+                } else if (reply === '☁️ Buka Menu Cloud' || reply === '☁️ Akun Cloud') {
+                  setShowAuthModal(true);
                 } else {
                   handleSendMessage(reply);
                 }
@@ -236,8 +248,12 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
 
         <QuickChips
           onSelect={chip => {
-            if (chip === '📍 Absen Online' || chip === '📍 Ruangan Sekarang' && chip.includes('Absen')) {
+            if (chip === '📍 Absen Online') {
               setShowAttendanceModal(true);
+            } else if (chip === '📊 Insight & PDF') {
+              setShowReportModal(true);
+            } else if (chip === '☁️ Akun Cloud') {
+              setShowAuthModal(true);
             } else {
               handleSendMessage(chip);
             }
@@ -263,9 +279,18 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
             <Text style={styles.attachIcon}>📍</Text>
           </TouchableOpacity>
 
+          {/* Quick PDF Report Icon */}
+          <TouchableOpacity
+            style={styles.attachBtn}
+            onPress={() => setShowReportModal(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.attachIcon}>📊</Text>
+          </TouchableOpacity>
+
           <TextInput
             style={styles.textInput}
-            placeholder="Tanya jadwal, tugas, absen, seragam..."
+            placeholder="Tanya jadwal, absen, insight pdf, tugas..."
             placeholderTextColor={COLORS.textLight}
             value={inputText}
             onChangeText={setInputText}
@@ -283,6 +308,16 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      <ReportModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+      />
+
+      <AuthModal
+        visible={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+      />
 
       <AttendanceModal
         visible={showAttendanceModal}
@@ -353,9 +388,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   attachBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: COLORS.primaryLight,
     borderWidth: 1,
     borderColor: COLORS.primaryBadge,
@@ -363,7 +398,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   attachIcon: {
-    fontSize: 16,
+    fontSize: 15,
   },
   textInput: {
     flex: 1,
@@ -371,15 +406,15 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     paddingHorizontal: 14,
     paddingVertical: 9,
-    fontSize: 13,
+    fontSize: 12,
     color: COLORS.textDark,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -390,7 +425,7 @@ const styles = StyleSheet.create({
   },
   sendIcon: {
     color: COLORS.white,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: 'bold',
   },
 });

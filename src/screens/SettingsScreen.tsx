@@ -19,6 +19,9 @@ import { ScheduleOverride, UserSettings } from '../types';
 import { Header } from '../components/Header';
 import { StorageService } from '../services/storage';
 import { NotificationService, getReminderLabel } from '../services/notificationService';
+import { AuthModal } from '../components/AuthModal';
+import { ReportModal } from '../components/ReportModal';
+import { CloudSyncService, UserProfile } from '../services/cloudSync';
 
 interface SettingsScreenProps {
   currentClass: string;
@@ -45,6 +48,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
   const [selectedOffsets, setSelectedOffsets] = useState<number[]>([30]);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [cloudUser, setCloudUser] = useState<UserProfile | null>(null);
 
   useEffect(() => {
     loadData();
@@ -53,8 +59,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const loadData = async () => {
     const s = await StorageService.getSettings();
     const o = await StorageService.getOverrides();
+    const cu = await CloudSyncService.getLocalProfile();
+
     setSettings(s);
     setOverrides(o);
+    setCloudUser(cu);
 
     if (s.notifyOffsets && s.notifyOffsets.length > 0) {
       setSelectedOffsets(s.notifyOffsets);
@@ -75,48 +84,30 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     }
   };
 
-  // Toggle multi-select reminder
-  const handleToggleOffset = (val: number) => {
-    let updated: number[];
+  const toggleOffsetOption = async (val: number) => {
+    let newOffsets: number[] = [];
     if (selectedOffsets.includes(val)) {
-      updated = selectedOffsets.filter(x => x !== val);
+      newOffsets = selectedOffsets.filter(v => v !== val);
     } else {
-      updated = [...selectedOffsets, val].sort((a, b) => a - b);
+      newOffsets = [...selectedOffsets, val].sort((a, b) => a - b);
     }
-    setSelectedOffsets(updated);
-  };
 
-  const handleSaveMultiOffsets = async () => {
+    setSelectedOffsets(newOffsets);
     if (settings) {
-      const updated = {
+      const updated: UserSettings = {
         ...settings,
-        notifyOffsets: selectedOffsets,
-        notifyBeforeMinutes: selectedOffsets[0] || 0,
+        notifyOffsets: newOffsets,
+        notifyBeforeMinutes: newOffsets.length > 0 ? newOffsets[0] : 0,
       };
       await StorageService.saveSettings(updated);
       setSettings(updated);
       await NotificationService.scheduleAllReminders();
-      setShowFilterDrawer(false);
-
-      if (selectedOffsets.length === 0) {
-        Alert.alert('Pengingat Dinonaktifkan', 'Semua notifikasi pengingat telah dimatikan.');
-      } else {
-        const labels = selectedOffsets.map(o => getReminderLabel(o)).join(', ');
-        Alert.alert(
-          'Multi-Pengingat Disimpan! 🔔',
-          `Alarm pengingat akan berbunyi di beberapa waktu:\n• ${labels}`
-        );
-      }
     }
   };
 
-  const handleTestNotification = async () => {
-    await NotificationService.sendInstantTestNotification();
-  };
-
-  const handleManualCheckUpdate = async () => {
-    if (__DEV__ || Platform.OS === 'web') {
-      Alert.alert('Info Update', 'Pengecekan live update berjalan di versi Standalone APK.');
+  const handleCheckUpdate = async () => {
+    if (Platform.OS === 'web' || __DEV__) {
+      Alert.alert('Live Update', 'Fitur Live Update aktif di aplikasi fisik yang ter-build.');
       return;
     }
 
@@ -188,204 +179,267 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <View style={styles.appInfo}>
             <Text style={styles.appName}>IDHAM SCHEDULE</Text>
             <Text style={styles.appDesc}>Asisten Jadwal & Agenda Offline</Text>
-            <Text style={styles.appVersion}>Versi 1.0.0 (Multi-Pengingat & Sound Ready)</Text>
+            <Text style={styles.appVersion}>Versi 1.0.0 • SMK Telkom Purwokerto</Text>
           </View>
         </View>
 
-        {/* Section: Live Over-The-Air Update */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>PEMBARUAN APLIKASI (LIVE UPDATE)</Text>
-          <Text style={styles.sectionSubtitle}>
-            Aplikasi otomatis memeriksa update saat dibuka. Anda juga dapat memeriksa secara manual:
-          </Text>
+        {/* ☁️ Cloud Supabase Integration Card */}
+        <TouchableOpacity
+          style={styles.cloudCard}
+          onPress={() => setShowAuthModal(true)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.cloudIconBox}>
+            <Text style={{ fontSize: 24 }}>☁️</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cloudTitle}>Database Cloud & Akun Supabase</Text>
+            <Text style={styles.cloudSub}>
+              {cloudUser
+                ? `Terhubung: ${cloudUser.fullName} (${cloudUser.email})`
+                : 'Login / Backup data agar jadwal & tugas tidak hilang'}
+            </Text>
+          </View>
+          <Text style={styles.cloudArrow}>➔</Text>
+        </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.updateBtn}
-            onPress={handleManualCheckUpdate}
-            disabled={checkingUpdate}
-            activeOpacity={0.7}
-          >
-            {checkingUpdate ? (
-              <ActivityIndicator color={COLORS.white} />
-            ) : (
-              <Text style={styles.updateBtnText}>🔄 Periksa Pembaruan Sekarang</Text>
-            )}
-          </TouchableOpacity>
+        {/* 📊 Insight & Download PDF Card */}
+        <TouchableOpacity
+          style={styles.reportCard}
+          onPress={() => setShowReportModal(true)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.reportIconBox}>
+            <Text style={{ fontSize: 24 }}>📊</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.reportTitle}>Insight & Evaluasi Belajar</Text>
+            <Text style={styles.reportSub}>
+              Statistik Izin, Sakit, Alpa per bulan & Download Laporan PDF
+            </Text>
+          </View>
+          <Text style={styles.reportArrow}>📄 PDF</Text>
+        </TouchableOpacity>
+
+        {/* Notifikasi & Pengingat Multi-Select Drawer Trigger */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>🔔 PENGINGAT & NADA DERING</Text>
+          <View style={styles.card}>
+            <View style={styles.filterBarHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardLabel}>Waktu Pengingat Alarm</Text>
+                <Text style={styles.cardSub}>
+                  {selectedOffsets.length > 0
+                    ? `Aktif: ${selectedOffsets.map(m => getReminderLabel(m)).join(', ')}`
+                    : 'Tidak ada pengingat aktif (Mati)'}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.hamburgerBtn}
+                onPress={() => setShowFilterDrawer(true)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.hamburgerIcon}>☰</Text>
+                <Text style={styles.hamburgerText}>Filter Bar ({selectedOffsets.length})</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.testNotifBtn}
+              onPress={() => NotificationService.sendInstantTestNotification()}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.testNotifText}>🔔 Tes Ringtone & Getar Notifikasi</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Section: Multi-Select Hamburger Filtering Bar Pengingat */}
+        {/* Pilihan Kelas Default */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>PENGINGAT & FILTER NOTIFIKASI (MULTI-INPUT)</Text>
-          <Text style={styles.sectionSubtitle}>
-            Anda dapat memilih lebih dari 1 waktu pengingat sekaligus (misal: 15 menit & 1 jam & 1 hari sebelum):
-          </Text>
-
-          {/* Filtering Bar Menu */}
-          <TouchableOpacity
-            style={styles.filteringBar}
-            onPress={() => setShowFilterDrawer(true)}
-            activeOpacity={0.8}
-          >
-            <View style={styles.hamburgerIconContainer}>
-              <Text style={styles.hamburgerIcon}>☰</Text>
-            </View>
-            <View style={styles.filterBarInfo}>
-              <Text style={styles.filterBarLabel}>
-                Pengingat Aktif ({selectedOffsets.length} Waktu)
-              </Text>
-              <Text style={styles.filterBarValue} numberOfLines={2}>
-                {selectedOffsets.length > 0
-                  ? selectedOffsets.map(o => getReminderLabel(o)).join(' • ')
-                  : '🔕 Pengingat Nonaktif'}
-              </Text>
-            </View>
-            <View style={styles.filterBadge}>
-              <Text style={styles.filterBadgeText}>Ubah (☰)</Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.testNotifBtn} onPress={handleTestNotification}>
-            <Text style={styles.testNotifText}>🔔 Tes Ringtone & Getar Notifikasi</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Section: Pilih Kelas Aktif */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>PILIH KELAS UTAMA</Text>
-          <Text style={styles.sectionSubtitle}>
-            Jadwal default saat ini diatur untuk kelas XII PPLG 3 SMK Telkom Purwokerto.
-          </Text>
-
-          <View style={styles.classesGrid}>
-            {AVAILABLE_CLASSES.map(cls => {
-              const isSelected = currentClass === cls;
-              return (
+          <Text style={styles.sectionTitle}>🏫 KELAS DEFAULT</Text>
+          <View style={styles.card}>
+            <View style={styles.classGrid}>
+              {AVAILABLE_CLASSES.map(cls => (
                 <TouchableOpacity
                   key={cls}
-                  style={[styles.classOption, isSelected && styles.selectedClassOption]}
+                  style={[
+                    styles.classChip,
+                    currentClass === cls && styles.activeClassChip,
+                  ]}
                   onPress={() => handleSelectClass(cls)}
-                  activeOpacity={0.7}
                 >
                   <Text
-                    style={[styles.classOptionText, isSelected && styles.selectedClassOptionText]}
+                    style={[
+                      styles.classChipText,
+                      currentClass === cls && styles.activeClassChipText,
+                    ]}
                   >
                     {cls}
                   </Text>
                 </TouchableOpacity>
-              );
-            })}
+              ))}
+            </View>
           </View>
         </View>
 
-        {/* Section: Active Overrides */}
+        {/* Perubahan Jadwal Aktif */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>PERUBAHAN JADWAL MANDIRI (OVERRIDES)</Text>
-          {overrides.length > 0 ? (
-            overrides.map(o => (
-              <View key={o.id} style={styles.overrideItem}>
-                <View style={styles.overrideInfo}>
-                  <Text style={styles.overrideDay}>
-                    📅 {o.day.toUpperCase()} • Jam ke-{o.period} ({o.className})
-                  </Text>
-                  <Text style={styles.overrideSubject}>
-                    {o.newSubjectName || o.newSubjectCode || 'Mapel Tetap'} @ Ruang {o.newRoom || '-'}
-                  </Text>
-                  {o.note ? <Text style={styles.overrideNote}>Note: {o.note}</Text> : null}
+          <Text style={styles.sectionTitle}>
+            ✏️ PERUBAHAN JADWAL SEMENTARA ({overrides.length})
+          </Text>
+          <View style={styles.card}>
+            {overrides.length > 0 ? (
+              overrides.map(override => (
+                <View key={override.id} style={styles.overrideItem}>
+                  <View style={styles.overrideInfo}>
+                    <Text style={styles.overrideTitle}>
+                      {override.day.toUpperCase()} • Jam ke-{override.period}
+                    </Text>
+                    <Text style={styles.overrideDetail}>
+                      {override.newSubjectName || override.newSubjectCode}
+                    </Text>
+                    {override.newRoom ? (
+                      <Text style={styles.overrideRoom}>Ruang: {override.newRoom}</Text>
+                    ) : null}
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={() => handleDeleteOverride(override.id)}
+                    style={styles.deleteBtn}
+                  >
+                    <Text style={styles.deleteBtnText}>Reset</Text>
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity onPress={() => handleDeleteOverride(o.id)}>
-                  <Text style={styles.deleteText}>Hapus</Text>
-                </TouchableOpacity>
-              </View>
-            ))
-          ) : (
-            <Text style={styles.emptyNote}>
-              Tidak ada jadwal yang sedang diubah (menggunakan jadwal baku master).
-            </Text>
-          )}
+              ))
+            ) : (
+              <Text style={styles.emptyText}>Tidak ada perubahan jadwal aktif.</Text>
+            )}
+          </View>
         </View>
 
-        {/* Section: Data Management */}
+        {/* Live OTA Update Card */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>MANAJEMEN DATA & RIWAYAT</Text>
-          <TouchableOpacity style={styles.dangerButton} onPress={handleClearAllChats}>
-            <Text style={styles.dangerButtonText}>🧹 Bersihkan Riwayat Chat Bot</Text>
-          </TouchableOpacity>
+          <Text style={styles.sectionTitle}>🔄 PEMBARUAN LIVE APLIKASI (OTA)</Text>
+          <View style={styles.card}>
+            <Text style={styles.updateDesc}>
+              Aplikasi mendukung pembaruan kode otomatis langsung tanpa perlu download ulang file APK.
+            </Text>
+            <TouchableOpacity
+              style={styles.updateBtn}
+              onPress={handleCheckUpdate}
+              disabled={checkingUpdate}
+              activeOpacity={0.8}
+            >
+              {checkingUpdate ? (
+                <ActivityIndicator color={COLORS.white} size="small" />
+              ) : (
+                <Text style={styles.updateBtnText}>⚡ Periksa Pembaruan Sekarang</Text>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <View style={{ height: 40 }} />
+        {/* Clear Data */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>🧹 RIWAYAT & PENYIMPANAN</Text>
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={styles.clearChatBtn}
+              onPress={handleClearAllChats}
+            >
+              <Text style={styles.clearChatText}>Hapus Riwayat Percakapan Bot</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={{ height: 60 }} />
       </ScrollView>
 
-      {/* Hamburger Multi-Select Filtering Drawer Modal */}
+      {/* Hamburger Drawer Filter Bar Modal */}
       <Modal visible={showFilterDrawer} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalDrawer}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalTitleRow}>
-                <Text style={styles.modalIcon}>☰</Text>
-                <Text style={styles.modalTitle}>Pilih Pengingat (Bisa Lebih dari 1)</Text>
+        <View style={styles.drawerOverlay}>
+          <View style={styles.drawerContent}>
+            <View style={styles.drawerHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 20 }}>☰</Text>
+                <Text style={styles.drawerTitle}>Pilih Waktu Pengingat Alarm</Text>
               </View>
               <TouchableOpacity onPress={() => setShowFilterDrawer(false)}>
-                <Text style={styles.modalCloseText}>✕</Text>
+                <Text style={styles.closeDrawerText}>✕</Text>
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.drawerHint}>
-              Centang semua waktu yang Anda inginkan agar HP berbunyi & bergetar di setiap waktu tersebut:
+            <Text style={styles.drawerSub}>
+              Pilih waktu alarm (bisa centang lebih dari 1):
             </Text>
 
-            <ScrollView style={styles.drawerList} showsVerticalScrollIndicator={false}>
-              {NOTIFICATION_FILTER_OPTIONS.map(option => {
-                const isSelected = selectedOffsets.includes(option.value);
+            <ScrollView style={styles.drawerList}>
+              {NOTIFICATION_FILTER_OPTIONS.map(opt => {
+                const isSelected = selectedOffsets.includes(opt.value);
                 return (
                   <TouchableOpacity
-                    key={option.value}
-                    style={[styles.drawerItem, isSelected && styles.selectedDrawerItem]}
-                    onPress={() => handleToggleOffset(option.value)}
+                    key={opt.value}
+                    style={[styles.drawerItem, isSelected && styles.activeDrawerItem]}
+                    onPress={() => toggleOffsetOption(opt.value)}
                     activeOpacity={0.7}
                   >
-                    <View style={styles.drawerItemLeft}>
-                      <View style={[styles.checkbox, isSelected && styles.checkboxActive]}>
-                        {isSelected && <Text style={styles.checkmark}>✓</Text>}
-                      </View>
-                      <Text style={styles.drawerItemIcon}>{option.icon}</Text>
+                    <Text style={styles.drawerItemIcon}>{opt.icon}</Text>
+                    <View style={{ flex: 1 }}>
                       <Text
                         style={[
                           styles.drawerItemLabel,
-                          isSelected && styles.selectedDrawerItemLabel,
+                          isSelected && styles.activeDrawerItemLabel,
                         ]}
                       >
-                        {option.label}
+                        {opt.label}
+                      </Text>
+                      <Text style={styles.drawerItemDesc}>
+                        {opt.value < 60
+                          ? `Alarm berdering ${opt.value} menit sebelumnya`
+                          : opt.value < 1440
+                          ? `Alarm berdering 1 jam sebelumnya`
+                          : `Alarm berdering ${Math.round(opt.value / 1440)} hari sebelumnya`}
                       </Text>
                     </View>
 
                     <View
                       style={[
-                        styles.drawerBadge,
-                        isSelected && styles.selectedDrawerBadge,
+                        styles.checkboxBox,
+                        isSelected && styles.activeCheckboxBox,
                       ]}
                     >
-                      <Text
-                        style={[
-                          styles.drawerBadgeText,
-                          isSelected && styles.selectedDrawerBadgeText,
-                        ]}
-                      >
-                        {option.badge}
-                      </Text>
+                      {isSelected && <Text style={styles.checkText}>✓</Text>}
                     </View>
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
 
-            <TouchableOpacity style={styles.saveMultiBtn} onPress={handleSaveMultiOffsets}>
-              <Text style={styles.saveMultiBtnText}>
-                ✓ Terapkan ({selectedOffsets.length} Waktu Pengingat)
-              </Text>
+            <TouchableOpacity
+              style={styles.doneBtn}
+              onPress={() => setShowFilterDrawer(false)}
+            >
+              <Text style={styles.doneBtnText}>Selesai & Simpan ({selectedOffsets.length} Waktu)</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
+
+      {/* Cloud Auth Modal */}
+      <AuthModal
+        visible={showAuthModal}
+        onClose={() => {
+          setShowAuthModal(false);
+          loadData();
+        }}
+      />
+
+      {/* Report & PDF Modal */}
+      <ReportModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+      />
     </SafeAreaView>
   );
 };
@@ -397,30 +451,30 @@ const styles = StyleSheet.create({
   },
   scrollArea: {
     flex: 1,
+    padding: 16,
   },
   profileCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.white,
-    margin: 16,
-    padding: 16,
     borderRadius: 16,
+    padding: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
-    gap: 16,
+    marginBottom: 12,
+    elevation: 2,
+    gap: 12,
   },
   appIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.primaryLight,
+    width: 50,
+    height: 50,
+    borderRadius: 10,
   },
   appInfo: {
     flex: 1,
   },
   appName: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: COLORS.primary,
   },
@@ -430,317 +484,339 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   appVersion: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    marginTop: 2,
-  },
-  section: {
-    backgroundColor: COLORS.white,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  sectionSubtitle: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    marginBottom: 14,
-  },
-  updateBtn: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  updateBtnText: {
-    color: COLORS.white,
-    fontSize: 13,
-    fontWeight: 'bold',
-  },
-  filteringBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-    borderWidth: 1.5,
-    borderColor: COLORS.primaryBadge,
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 12,
-    gap: 10,
-  },
-  hamburgerIconContainer: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  hamburgerIcon: {
-    color: COLORS.white,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  filterBarInfo: {
-    flex: 1,
-  },
-  filterBarLabel: {
     fontSize: 10,
     color: COLORS.textMuted,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  filterBarValue: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: COLORS.primary,
     marginTop: 2,
   },
-  filterBadge: {
+  cloudCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1.5,
+    borderColor: '#93C5FD',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    gap: 12,
+  },
+  cloudIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cloudTitle: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#1E40AF',
+  },
+  cloudSub: {
+    fontSize: 11,
+    color: '#3B82F6',
+    marginTop: 2,
+  },
+  cloudArrow: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1E40AF',
+  },
+  reportCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1.5,
+    borderColor: '#FCA5A5',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
+    gap: 12,
+  },
+  reportIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reportTitle: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#991B1B',
+  },
+  reportSub: {
+    fontSize: 11,
+    color: '#DC2626',
+    marginTop: 2,
+  },
+  reportArrow: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: COLORS.white,
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  section: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: COLORS.textMuted,
+    marginBottom: 8,
+    letterSpacing: 0.5,
+  },
+  card: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 12,
+  },
+  filterBarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  cardLabel: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: COLORS.textDark,
+  },
+  cardSub: {
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  hamburgerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: COLORS.primaryLight,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: COLORS.primaryBadge,
+    gap: 6,
   },
-  filterBadgeText: {
-    fontSize: 11,
+  hamburgerIcon: {
+    fontSize: 16,
     color: COLORS.primary,
     fontWeight: 'bold',
+  },
+  hamburgerText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: COLORS.primary,
   },
   testNotifBtn: {
     backgroundColor: COLORS.primaryLight,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: 10,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.primaryBadge,
   },
   testNotifText: {
-    color: COLORS.primary,
     fontSize: 12,
     fontWeight: 'bold',
+    color: COLORS.primary,
   },
-  classesGrid: {
+  classGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
-  classOption: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
+  classChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
     backgroundColor: COLORS.background,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  selectedClassOption: {
+  activeClassChip: {
     backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
-  classOptionText: {
+  classChipText: {
     fontSize: 12,
-    fontWeight: '600',
     color: COLORS.textDark,
+    fontWeight: '600',
   },
-  selectedClassOptionText: {
+  activeClassChipText: {
     color: COLORS.white,
+    fontWeight: 'bold',
   },
   overrideItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
   },
   overrideInfo: {
     flex: 1,
   },
-  overrideDay: {
+  overrideTitle: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: COLORS.primary,
-  },
-  overrideSubject: {
-    fontSize: 13,
     color: COLORS.textDark,
+  },
+  overrideDetail: {
+    fontSize: 12,
+    color: COLORS.primary,
     marginTop: 2,
   },
-  overrideNote: {
+  overrideRoom: {
     fontSize: 11,
     color: COLORS.textMuted,
-    fontStyle: 'italic',
   },
-  deleteText: {
-    fontSize: 12,
+  deleteBtn: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  deleteBtnText: {
+    fontSize: 11,
     color: '#EF4444',
     fontWeight: '600',
-    padding: 6,
   },
-  emptyNote: {
+  updateDesc: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    lineHeight: 16,
+  },
+  updateBtn: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  updateBtnText: {
+    color: COLORS.white,
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  clearChatBtn: {
+    backgroundColor: '#FEE2E2',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  clearChatText: {
+    color: '#EF4444',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  emptyText: {
     fontSize: 12,
     color: COLORS.textMuted,
     fontStyle: 'italic',
-    marginTop: 4,
   },
-  dangerButton: {
-    backgroundColor: COLORS.primaryLight,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.primaryBadge,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  dangerButtonText: {
-    color: COLORS.primary,
-    fontWeight: 'bold',
-    fontSize: 13,
-  },
-  modalOverlay: {
+  drawerOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
-  modalDrawer: {
+  drawerContent: {
     backgroundColor: COLORS.white,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    padding: 20,
     maxHeight: '85%',
+    padding: 16,
   },
-  modalHeader: {
+  drawerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
-    marginBottom: 8,
+    marginBottom: 6,
   },
-  modalTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-  },
-  modalIcon: {
-    fontSize: 18,
-    color: COLORS.primary,
-    fontWeight: 'bold',
-  },
-  modalTitle: {
+  drawerTitle: {
     fontSize: 14,
     fontWeight: 'bold',
     color: COLORS.textDark,
   },
-  modalCloseText: {
-    fontSize: 18,
+  closeDrawerText: {
+    fontSize: 20,
     color: COLORS.textMuted,
     fontWeight: 'bold',
-    padding: 4,
   },
-  drawerHint: {
-    fontSize: 12,
+  drawerSub: {
+    fontSize: 11,
     color: COLORS.textMuted,
-    marginBottom: 10,
-    lineHeight: 16,
+    marginBottom: 12,
   },
   drawerList: {
-    marginVertical: 4,
+    marginBottom: 12,
   },
   drawerItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    marginBottom: 6,
-    backgroundColor: COLORS.background,
-  },
-  selectedDrawerItem: {
-    backgroundColor: COLORS.primaryLight,
+    padding: 10,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: COLORS.primaryBadge,
-  },
-  drawerItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.background,
+    marginBottom: 8,
     gap: 10,
-    flex: 1,
   },
-  checkbox: {
+  activeDrawerItem: {
+    backgroundColor: COLORS.primaryLight,
+    borderColor: COLORS.primary,
+  },
+  drawerItemIcon: {
+    fontSize: 20,
+  },
+  drawerItemLabel: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: COLORS.textDark,
+  },
+  activeDrawerItemLabel: {
+    color: COLORS.primary,
+  },
+  drawerItemDesc: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  checkboxBox: {
     width: 22,
     height: 22,
     borderRadius: 6,
-    borderWidth: 2,
-    borderColor: COLORS.primary,
+    borderWidth: 1.5,
+    borderColor: COLORS.textLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkboxActive: {
-    backgroundColor: COLORS.primary,
-  },
-  checkmark: {
-    color: COLORS.white,
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  drawerItemIcon: {
-    fontSize: 16,
-  },
-  drawerItemLabel: {
-    fontSize: 13,
-    color: COLORS.textDark,
-    fontWeight: '600',
-  },
-  selectedDrawerItemLabel: {
-    color: COLORS.primary,
-    fontWeight: 'bold',
-  },
-  drawerBadge: {
-    backgroundColor: COLORS.white,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  selectedDrawerBadge: {
+  activeCheckboxBox: {
     backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
-  drawerBadgeText: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    fontWeight: 'bold',
-  },
-  selectedDrawerBadgeText: {
+  checkText: {
     color: COLORS.white,
+    fontWeight: 'bold',
+    fontSize: 12,
   },
-  saveMultiBtn: {
+  doneBtn: {
     backgroundColor: COLORS.primary,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
-    marginTop: 10,
   },
-  saveMultiBtnText: {
+  doneBtnText: {
     color: COLORS.white,
     fontWeight: 'bold',
-    fontSize: 14,
+    fontSize: 12,
   },
 });

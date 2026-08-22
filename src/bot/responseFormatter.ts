@@ -4,25 +4,25 @@ import { StorageService } from '../services/storage';
 import { KnowledgeService } from '../services/knowledgeService';
 import { NotificationService } from '../services/notificationService';
 import { AttendanceService } from '../services/attendanceService';
+import { ReportService } from '../services/reportService';
+import { CloudSyncService } from '../services/cloudSync';
 import { UNIFORMS } from '../data/masterSchedule';
 import { parseUserQuery, ParsedQuery } from './nlpEngine';
 
 export interface BotResponseResult {
   text: string;
   quickReplies?: string[];
-  actionType?: 'schedule' | 'meeting' | 'override' | 'task' | 'knowledge' | 'attendance' | 'general';
-  openModal?: 'meeting' | 'override' | 'task' | 'knowledge' | 'attendance';
+  actionType?: 'schedule' | 'meeting' | 'override' | 'task' | 'knowledge' | 'attendance' | 'report' | 'auth' | 'general';
+  openModal?: 'meeting' | 'override' | 'task' | 'knowledge' | 'attendance' | 'report' | 'auth';
   modalData?: any;
 }
 
-// In-memory / storage undo state stack
 let lastModifiedOverride: ScheduleOverride | null = null;
 let lastModifiedTask: TaskAssignment | null = null;
 
 export async function generateBotResponse(userInput: string, currentClass: string): Promise<BotResponseResult> {
-  // First, check if the question matches any learned document in Knowledge Base!
   const knowledgeMatch = await KnowledgeService.searchKnowledge(userInput);
-  if (knowledgeMatch && userInput.length > 5 && !['jadwal', 'tugas', 'meeting', 'seragam', 'absen', 'undo'].includes(userInput.toLowerCase().trim())) {
+  if (knowledgeMatch && userInput.length > 5 && !['jadwal', 'tugas', 'meeting', 'seragam', 'absen', 'undo', 'laporan', 'pdf', 'insight', 'login', 'backup'].includes(userInput.toLowerCase().trim())) {
     return {
       text: `📚 **Berdasarkan Dokumen Terpelajari [${knowledgeMatch.doc.title}]:**\n\n${knowledgeMatch.snippet}\n\n*File Sumber: ${knowledgeMatch.doc.fileName}*`,
       quickReplies: ['📂 Buka Dokumen Lain', '📅 Jadwal Hari Ini', '📝 Daftar Tugas'],
@@ -34,6 +34,37 @@ export async function generateBotResponse(userInput: string, currentClass: strin
   const now = new Date();
 
   switch (parsed.intent) {
+    case 'REPORT_INSIGHT': {
+      const insight = await ReportService.getInsights('month');
+      return {
+        text: `📊 **Insight & Evaluasi Belajar Siswa (${insight.studentName}):**\n\n` +
+          `• 🟢 **Hadir:** ${insight.attendanceStats.hadir} Hari (${insight.attendanceStats.percentageHadir}%)\n` +
+          `• 🔵 **Izin:** ${insight.attendanceStats.izin} Hari\n` +
+          `• 🟠 **Sakit:** ${insight.attendanceStats.sakit} Hari\n` +
+          `• 🔴 **Alpa:** ${insight.attendanceStats.alpa} Hari\n` +
+          `• 📝 **Tugas Selesai:** ${insight.taskStats.completed}/${insight.taskStats.total} (${insight.taskStats.percentageCompleted}%)\n` +
+          `• 🏆 **Skor Produktivitas:** ${insight.weeklyProductivityScore}%\n\n` +
+          `*Tekan tombol di bawah untuk melihat rincian lengkap atau mengunduh laporan berformat PDF:*`,
+        openModal: 'report',
+        actionType: 'report',
+        quickReplies: ['📄 Buka Laporan PDF', '📅 Jadwal Hari Ini', '📝 Daftar Tugas'],
+      };
+    }
+
+    case 'CLOUD_AUTH': {
+      const profile = await CloudSyncService.getLocalProfile();
+      const statusText = profile
+        ? `Akun Anda terhubung sebagai **${profile.fullName}** (${profile.email}).`
+        : `Anda belum masuk ke akun Cloud Supabase. Masuk/Daftar agar data jadwal dan presensi tidak hilang saat berganti perangkat.`;
+
+      return {
+        text: `☁️ **Database Cloud Supabase:**\n\n${statusText}`,
+        openModal: 'auth',
+        actionType: 'auth',
+        quickReplies: ['☁️ Buka Menu Cloud', '📅 Jadwal Hari Ini'],
+      };
+    }
+
     case 'UNDO_ACTION': {
       if (lastModifiedOverride) {
         await StorageService.deleteOverride(lastModifiedOverride.id);
@@ -81,8 +112,8 @@ export async function generateBotResponse(userInput: string, currentClass: strin
 
     case 'GREETING': {
       return {
-        text: `Halo Idham! 👋 Ada yang bisa saya bantu untuk jadwal kelas **${currentClass}**, tugas sekolah, presensi online, atau agenda meeting hari ini?`,
-        quickReplies: ['📅 Jadwal Hari Ini', '📝 Daftar Tugas', '📍 Absen Online', '👕 Seragam Hari Ini'],
+        text: `Halo Idham! 👋 Ada yang bisa saya bantu untuk jadwal kelas **${currentClass}**, tugas sekolah, presensi online, insight laporan bulanan, atau agenda meeting?`,
+        quickReplies: ['📅 Jadwal Hari Ini', '📊 Insight & PDF', '📝 Daftar Tugas', '📍 Absen Online', '👕 Seragam'],
         actionType: 'general',
       };
     }
@@ -93,14 +124,14 @@ export async function generateBotResponse(userInput: string, currentClass: strin
           `• 📅 **Tanya Jadwal:** *"Jadwal hari ini"*, *"Jadwal besok"*, *"Jadwal hari Rabu"*\n` +
           `• 📍 **Tanya Ruangan:** *"Ruangan sekarang"*, *"Sekarang di mana?"*\n` +
           `• 📍 **Absensi Mandiri:** *"Absen"*, *"Presensi"*, *"Absen masuk/pulang"*\n` +
+          `• 📊 **Insight & Laporan PDF:** *"Insight"*, *"Laporan bulanan"*, *"Download PDF"*\n` +
+          `• ☁️ **Akun Cloud Supabase:** *"Login"*, *"Akun"*, *"Backup data"*\n` +
           `• 📝 **Tugas & Deadline:** *"Daftar tugas"*, *"Ingatkan tugas MTK besok jam 23.59"*\n` +
-          `• 📎 **Belajar Dokumen Baru:** *"Upload file"*, *"Belajar file"* (Kirim dokumen catatan/materi)\n` +
-          `• ↩️ **Batalkan Perubahan:** *"Undo"*, *"Batalkan"* (Membatalkan perubahan jadwal/tugas)\n` +
-          `• 📌 **Janji Meeting:** *"Ingatkan meeting OSIS besok jam 14.00 di Sentra"*\n` +
-          `• 👕 **Tanya Seragam:** *"Seragam besok apa?"*, *"Pakaian hari Kamis"*\n` +
-          `• ✏️ **Ubah Jadwal:** *"Ubah jadwal hari Kamis jam 3"*\n` +
+          `• 📎 **Belajar Dokumen Baru:** *"Upload file"* (Kirim dokumen catatan/materi)\n` +
+          `• ↩️ **Batalkan Perubahan:** *"Undo"*, *"Batalkan"*\n` +
+          `• 👕 **Tanya Seragam:** *"Seragam besok apa?"* (Senin: OSIS, Selasa: Identitas, Rabu: Batik, Kamis: Praktek, Jum'at: Pramuka)\n` +
           `• 🧹 **Bersihkan Obrolan:** *"Hapus chat"*`,
-        quickReplies: ['📅 Jadwal Hari Ini', '📝 Daftar Tugas', '📍 Absen Online', '↩️ Undo'],
+        quickReplies: ['📅 Jadwal Hari Ini', '📊 Insight & PDF', '📍 Absen Online', '☁️ Akun Cloud', '↩️ Undo'],
         actionType: 'general',
       };
     }
@@ -324,10 +355,11 @@ export async function generateBotResponse(userInput: string, currentClass: strin
         text: `Maaf Idham, saya belum menemukan jawaban di jadwal atau file yang pernah Anda unggah. 🤔\n\nAnda bisa mencoba:\n` +
           `• *"Jadwal hari ini"* atau *"Ruangan sekarang di mana?"*\n` +
           `• *"Absen masuk"* atau *"Presensi mandiri"*\n` +
-          `• *"Seragam hari ini"* (Senin: OSIS, Selasa: Identitas, Rabu: Batik, Kamis: Praktek, Jum'at: Pramuka)\n` +
-          `• *"Daftar tugas"* atau *"Tambah tugas"*\n` +
+          `• *"Insight"* atau *"Laporan PDF"*\n` +
+          `• *"Akun cloud"* atau *"Backup data"*\n` +
+          `• *"Seragam hari ini"*\n` +
           `• *"Undo"* untuk membatalkan perubahan terakhir`,
-        quickReplies: ['📅 Jadwal Hari Ini', '📍 Absen Online', '📝 Daftar Tugas', '👕 Seragam'],
+        quickReplies: ['📅 Jadwal Hari Ini', '📊 Insight & PDF', '📍 Absen Online', '📝 Daftar Tugas', '☁️ Akun Cloud'],
         actionType: 'general',
       };
     }

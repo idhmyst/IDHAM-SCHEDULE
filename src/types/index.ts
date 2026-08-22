@@ -82,7 +82,7 @@ export interface ChatMessage {
   text: string;
   timestamp: string;
   quickReplies?: string[];
-  actionType?: 'schedule' | 'meeting' | 'override' | 'task' | 'knowledge' | 'attendance' | 'general';
+  actionType?: 'schedule' | 'meeting' | 'override' | 'task' | 'knowledge' | 'attendance' | 'report' | 'auth' | 'general';
   attachedFileName?: string;
 }
 

@@ -67,18 +67,26 @@ export const StorageService = {
           .from('schedule_overrides')
           .upsert({
             id: override.id,
-            class_name: override.className,
             day: override.day,
             period: override.period,
+            class_name: override.className,
             new_subject_code: override.newSubjectCode,
             new_subject_name: override.newSubjectName,
             new_room: override.newRoom,
-            note: override.note,
+            is_active: true,
           })
           .then();
       }
     } catch (e) {
       console.error('Error saving override', e);
+    }
+  },
+
+  async saveAllOverrides(overrides: ScheduleOverride[]): Promise<void> {
+    try {
+      await AsyncStorage.setItem(KEYS.OVERRIDES, JSON.stringify(overrides));
+    } catch (e) {
+      console.error(e);
     }
   },
 
@@ -96,7 +104,7 @@ export const StorageService = {
     }
   },
 
-  // Meetings & Agenda
+  // Meetings
   async getMeetings(): Promise<MeetingAgenda[]> {
     try {
       const data = await AsyncStorage.getItem(KEYS.MEETINGS);
@@ -116,7 +124,6 @@ export const StorageService = {
       } else {
         existing.push(meeting);
       }
-      existing.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
       await AsyncStorage.setItem(KEYS.MEETINGS, JSON.stringify(existing));
 
       if (isSupabaseConfigured()) {
@@ -135,6 +142,14 @@ export const StorageService = {
       }
     } catch (e) {
       console.error('Error saving meeting', e);
+    }
+  },
+
+  async saveAllMeetings(meetings: MeetingAgenda[]): Promise<void> {
+    try {
+      await AsyncStorage.setItem(KEYS.MEETINGS, JSON.stringify(meetings));
+    } catch (e) {
+      console.error(e);
     }
   },
 
@@ -189,10 +204,34 @@ export const StorageService = {
       } else {
         existing.push(task);
       }
-      existing.sort((a, b) => `${a.deadlineDate} ${a.deadlineTime}`.localeCompare(`${b.deadlineDate} ${b.deadlineTime}`));
       await AsyncStorage.setItem(KEYS.TASKS, JSON.stringify(existing));
+
+      if (isSupabaseConfigured()) {
+        supabase
+          .from('tasks')
+          .upsert({
+            id: task.id,
+            title: task.title,
+            subject: task.subject,
+            deadline_date: task.deadlineDate,
+            deadline_time: task.deadlineTime,
+            description: task.description,
+            attached_file_name: task.attachedFileName,
+            attached_file_uri: task.attachedFileUri,
+            is_completed: task.isCompleted,
+          })
+          .then();
+      }
     } catch (e) {
       console.error('Error saving task', e);
+    }
+  },
+
+  async saveAllTasks(tasks: TaskAssignment[]): Promise<void> {
+    try {
+      await AsyncStorage.setItem(KEYS.TASKS, JSON.stringify(tasks));
+    } catch (e) {
+      console.error(e);
     }
   },
 
@@ -201,6 +240,10 @@ export const StorageService = {
       const existing = await this.getTasks();
       const filtered = existing.filter(t => t.id !== id);
       await AsyncStorage.setItem(KEYS.TASKS, JSON.stringify(filtered));
+
+      if (isSupabaseConfigured()) {
+        supabase.from('tasks').delete().eq('id', id).then();
+      }
     } catch (e) {
       console.error('Error deleting task', e);
     }
@@ -213,13 +256,17 @@ export const StorageService = {
       if (item) {
         item.isCompleted = !item.isCompleted;
         await AsyncStorage.setItem(KEYS.TASKS, JSON.stringify(existing));
+
+        if (isSupabaseConfigured()) {
+          supabase.from('tasks').update({ is_completed: item.isCompleted }).eq('id', id).then();
+        }
       }
     } catch (e) {
       console.error('Error toggling task', e);
     }
   },
 
-  // Knowledge Base (Dokumen yang dipelajari bot)
+  // Knowledge Documents
   async getKnowledgeDocs(): Promise<KnowledgeDocument[]> {
     try {
       const data = await AsyncStorage.getItem(KEYS.KNOWLEDGE);
@@ -233,12 +280,7 @@ export const StorageService = {
   async saveKnowledgeDoc(doc: KnowledgeDocument): Promise<void> {
     try {
       const existing = await this.getKnowledgeDocs();
-      const index = existing.findIndex(d => d.id === doc.id);
-      if (index >= 0) {
-        existing[index] = doc;
-      } else {
-        existing.unshift(doc);
-      }
+      existing.unshift(doc);
       await AsyncStorage.setItem(KEYS.KNOWLEDGE, JSON.stringify(existing));
     } catch (e) {
       console.error('Error saving knowledge doc', e);
@@ -268,6 +310,7 @@ export const StorageService = {
 
   async saveChats(chats: ChatMessage[]): Promise<void> {
     try {
+      // Keep only last 100 messages for storage efficiency
       const sliced = chats.slice(-100);
       await AsyncStorage.setItem(KEYS.CHATS, JSON.stringify(sliced));
     } catch (e) {

@@ -13,6 +13,8 @@ export interface ParsedQuery {
     | 'ADD_TASK'
     | 'LIST_TASKS'
     | 'ATTENDANCE'
+    | 'REPORT_INSIGHT'
+    | 'CLOUD_AUTH'
     | 'UNDO_ACTION'
     | 'LEARN_DOCUMENT'
     | 'OVERRIDE_SCHEDULE'
@@ -45,37 +47,47 @@ export interface ParsedQuery {
 export function parseUserQuery(input: string): ParsedQuery {
   const clean = input.trim().toLowerCase();
 
-  // 1. Undo / Cancel action
+  // 1. Report / Insight / PDF
+  if (/\b(insight|laporan|laporan pdf|download pdf|cetak pdf|evaluasi|perkembangan|statistik|rekap absen|rekap presensi)\b/i.test(clean)) {
+    return { intent: 'REPORT_INSIGHT' };
+  }
+
+  // 2. Cloud Auth / Supabase / Backup
+  if (/\b(login|masuk akun|daftar akun|akun cloud|database|supabase|backup data|sinkronkan|pulihkan data)\b/i.test(clean)) {
+    return { intent: 'CLOUD_AUTH' };
+  }
+
+  // 3. Undo / Cancel action
   if (/^(undo|batalkan|cancel|urungkan|kembalikan|batal|undo perubahan)\b/i.test(clean)) {
     return { intent: 'UNDO_ACTION' };
   }
 
-  // 2. Attendance / Absensi
+  // 4. Attendance / Absensi
   if (/\b(absen|presensi|absen masuk|absen pulang|absenin|kehadiran|titip absen)\b/i.test(clean)) {
     return { intent: 'ATTENDANCE' };
   }
 
-  // 3. Greetings
+  // 5. Greetings
   if (/^(halo|hai|hi|hey|assalamualaikum|pagi|siang|sore|malam|bot|oy|oi)\b/i.test(clean) && clean.length < 25) {
     return { intent: 'GREETING' };
   }
 
-  // 4. Help
+  // 6. Help
   if (/\b(bantuan|help|menu|bisa apa|fitur|cara pakai|panduan)\b/i.test(clean)) {
     return { intent: 'HELP' };
   }
 
-  // 5. Clear Chat
+  // 7. Clear Chat
   if (/\b(hapus chat|clear chat|bersihkan riwayat|reset percakapan)\b/i.test(clean)) {
     return { intent: 'CLEAR_CHAT' };
   }
 
-  // 6. Learn Document / Upload file
+  // 8. Learn Document / Upload file
   if (/\b(upload file|belajar file|tambah materi|unggah dokumen|baca file|upload tugas)\b/i.test(clean)) {
     return { intent: 'LEARN_DOCUMENT' };
   }
 
-  // 7. Add Task / Homework Assignment
+  // 9. Add Task / Homework Assignment
   if (/\b(tambah tugas|buat tugas|ingatkan tugas|catat tugas|ada pr|tambah pr)\b/i.test(clean)) {
     let deadlineDate = new Date().toISOString().split('T')[0];
     if (/\bbesok\b/i.test(clean)) {
@@ -128,12 +140,12 @@ export function parseUserQuery(input: string): ParsedQuery {
     };
   }
 
-  // 8. List Tasks / Check assignments
+  // 10. List Tasks
   if (/\b(daftar tugas|cek tugas|ada tugas apa|tugas saya|pr apa|deadline tugas|tugas belum selesai)\b/i.test(clean)) {
     return { intent: 'LIST_TASKS' };
   }
 
-  // 9. Current Room / Subject Right Now
+  // 11. Current Room / Subject Right Now
   if (
     /\b(ruang(an)? sekarang|sekarang di mana|mapel sekarang|jam ini apa|sekarang belajar apa|kelas sekarang)\b/i.test(clean) ||
     (/\bsekarang\b/i.test(clean) && /\b(ruang|mapel|kelas|pelajaran)\b/i.test(clean))
@@ -141,7 +153,7 @@ export function parseUserQuery(input: string): ParsedQuery {
     return { intent: 'ASK_CURRENT_ROOM' };
   }
 
-  // 10. Uniforms
+  // 12. Uniforms
   if (/\b(seragam|baju|pakaian|dresscode|kostum)\b/i.test(clean)) {
     let day: DayName | undefined;
     if (/\bbesok\b/i.test(clean)) {
@@ -161,7 +173,7 @@ export function parseUserQuery(input: string): ParsedQuery {
     return { intent: 'ASK_UNIFORM', targetDay: day };
   }
 
-  // 11. Add Meeting / Appointment
+  // 13. Add Meeting
   if (/\b(tambah|buat|ingatkan|jadwalkan|catat)\b.*\b(meeting|janji|agenda|rapat|temu|diskusi)\b/i.test(clean) ||
       /\b(meeting|janji|agenda|rapat)\b.*\b(jam|pukul)\b/i.test(clean)) {
     
@@ -209,12 +221,12 @@ export function parseUserQuery(input: string): ParsedQuery {
     };
   }
 
-  // 12. List Meetings
+  // 14. List Meetings
   if (/\b(daftar meeting|jadwal meeting|agenda saya|ada meeting apa|cek meeting|rapat apa|jadwal janji)\b/i.test(clean)) {
     return { intent: 'LIST_MEETINGS' };
   }
 
-  // 13. Override Schedule
+  // 15. Override Schedule
   if (/\b(ubah|ganti|update|override|revisi)\b.*\b(jadwal|ruangan|mapel|jam)\b/i.test(clean)) {
     let day: DayName = 'senin';
     const days: DayName[] = ['senin', 'selasa', 'rabu', 'kamis', 'jumat'];
@@ -240,13 +252,13 @@ export function parseUserQuery(input: string): ParsedQuery {
     };
   }
 
-  // 14. Ask Schedule: Tomorrow
+  // 16. Ask Schedule: Tomorrow
   if (/\b(jadwal besok|besok mapel apa|besok belajar apa|besok ada apa|pelajaran besok)\b/i.test(clean) ||
       (/\bbesok\b/i.test(clean) && /\b(jadwal|mapel|pelajaran|ruang)\b/i.test(clean))) {
     return { intent: 'ASK_SCHEDULE_TOMORROW' };
   }
 
-  // 15. Ask Schedule: Specific Day
+  // 17. Ask Schedule: Specific Day
   const daysMap: { [k: string]: DayName } = {
     senin: 'senin',
     selasa: 'selasa',
@@ -264,14 +276,14 @@ export function parseUserQuery(input: string): ParsedQuery {
     }
   }
 
-  // 16. Ask Schedule: Today
+  // 18. Ask Schedule: Today
   if (/\b(jadwal hari ini|hari ini mapel apa|hari ini belajar apa|jadwal sekarang|jadwalnya apa)\b/i.test(clean) ||
       (/\bhari ini\b/i.test(clean) && /\b(jadwal|mapel|pelajaran|kelas)\b/i.test(clean)) ||
       clean === 'jadwal') {
     return { intent: 'ASK_SCHEDULE_TODAY' };
   }
 
-  // 17. Search specific subject
+  // 19. Search specific subject
   const knownSubjects = ['mtk', 'matematika', 'ing', 'inggris', 'ina', 'indonesia', 'pai', 'agama', 'bk', 'bjw', 'jawa', 'ppc', 'pancasila', 'mp1', 'mk1', 'mk2', 'mk3', 'mk4', 'kik'];
   for (const sub of knownSubjects) {
     if (clean.includes(sub)) {

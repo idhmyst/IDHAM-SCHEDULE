@@ -8,7 +8,9 @@ interface QuickChipsProps {
 
 const DEFAULT_CHIPS = [
   '📅 Jadwal Hari Ini',
+  '📊 Insight & PDF',
   '📍 Absen Online',
+  '☁️ Akun Cloud',
   '👕 Seragam Hari Ini',
   '📝 Daftar Tugas',
   '📍 Ruangan Sekarang',
