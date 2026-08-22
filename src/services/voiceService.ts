@@ -17,6 +17,7 @@ export const VoiceService = {
     const wakePatterns = [
       /\b(hai|halo|helo|hey|hei|oke|ok)\s+idham\b/i,
       /\bidham\s+ai\b/i,
+      /\b(hai|halo|helo)\s+dam\b/i,
       /^idham\b/i,
     ];
     return wakePatterns.some(pattern => pattern.test(clean));
@@ -27,6 +28,7 @@ export const VoiceService = {
     return text
       .replace(/\b(hai|halo|helo|hey|hei|oke|ok)\s+idham\b/gi, '')
       .replace(/\bidham\s+ai\b/gi, '')
+      .replace(/\b(hai|halo|helo)\s+dam\b/gi, '')
       .replace(/^idham\b/gi, '')
       .trim();
   },
@@ -36,7 +38,12 @@ export const VoiceService = {
     if (Platform.OS === 'web') {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
+        const cleanText = text
+          .replace(/[*_#`~]/g, '')
+          .replace(/\[.*?\]\(.*?\)/g, '')
+          .replace(/•/g, ', ')
+          .trim();
+        const utterance = new SpeechSynthesisUtterance(cleanText);
         utterance.lang = 'id-ID';
         utterance.rate = 1.0;
         utterance.pitch = 1.0;
@@ -51,7 +58,7 @@ export const VoiceService = {
         await Speech.stop();
       }
 
-      // Clean markdown tags for clear Indonesian TTS
+      // Clean markdown tags for natural Indonesian TTS
       const cleanText = text
         .replace(/[*_#`~]/g, '')
         .replace(/\[.*?\]\(.*?\)/g, '')
@@ -60,7 +67,7 @@ export const VoiceService = {
 
       Speech.speak(cleanText, {
         language: 'id-ID',
-        pitch: 1.05,
+        pitch: 1.0,
         rate: 0.95,
       });
     } catch (e) {

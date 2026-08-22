@@ -24,7 +24,8 @@
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
-        "SCHEDULE_EXACT_ALARM"
+        "SCHEDULE_EXACT_ALARM",
+        "RECORD_AUDIO"
       ]
     },
     "web": {
@@ -53,7 +54,9 @@
       ]
     ],
     "updates": {
-      "url": "https://u.expo.dev/7d64c4bc-deaa-4e19-a336-1127c686df40"
+      "url": "https://u.expo.dev/7d64c4bc-deaa-4e19-a336-1127c686df40",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
     },
     "runtimeVersion": {
       "policy": "appVersion"

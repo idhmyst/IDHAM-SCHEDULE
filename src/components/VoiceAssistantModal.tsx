@@ -39,76 +39,122 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [aiResponse, setAiResponse] = useState('');
-  const [statusText, setStatusText] = useState('Katakan "Hai Idham" atau ucapkan perintah...');
+  const [statusText, setStatusText] = useState('🎙️ Sedang mendengarkan ucapan Anda...');
   const [isSpeaking, setIsSpeaking] = useState(false);
 
-  // Animation values for pulsing orb
+  // Animations
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const rotateAnim = useRef(new Animated.Value(0)).current;
+  const waveAnim1 = useRef(new Animated.Value(0.3)).current;
+  const waveAnim2 = useRef(new Animated.Value(0.6)).current;
+  const waveAnim3 = useRef(new Animated.Value(0.9)).current;
+  const waveAnim4 = useRef(new Animated.Value(0.4)).current;
+  const waveAnim5 = useRef(new Animated.Value(0.7)).current;
+
+  const recognitionRef = useRef<any>(null);
+  const silenceTimerRef = useRef<any>(null);
 
   useEffect(() => {
     if (visible) {
-      startPulseAnimation();
-      handleStartListening();
+      startAnimations();
+      // Auto-start listening immediately upon opening!
+      setTimeout(() => {
+        startListeningSession();
+      }, 200);
     } else {
+      stopListeningSession();
       VoiceService.stopSpeaking();
       setIsSpeaking(false);
       setIsListening(false);
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     }
   }, [visible]);
 
-  const startPulseAnimation = () => {
+  const startAnimations = () => {
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 1.25,
-          duration: 1000,
+          toValue: 1.2,
+          duration: 800,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
-          duration: 1000,
+          duration: 800,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
       ])
     ).start();
 
-    Animated.loop(
-      Animated.timing(rotateAnim, {
-        toValue: 1,
-        duration: 8000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    ).start();
+    // Waveform animated bars
+    const createWaveLoop = (anim: Animated.Value, maxVal: number, duration: number) => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(anim, {
+            toValue: maxVal,
+            duration,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim, {
+            toValue: 0.2,
+            duration,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    };
+
+    createWaveLoop(waveAnim1, 1.0, 350);
+    createWaveLoop(waveAnim2, 1.2, 450);
+    createWaveLoop(waveAnim3, 1.4, 300);
+    createWaveLoop(waveAnim4, 1.1, 400);
+    createWaveLoop(waveAnim5, 0.9, 500);
   };
 
-  const handleStartListening = () => {
+  const startListeningSession = () => {
     setIsListening(true);
-    setStatusText('🎙️ IDHAM AI sedang mendengarkan...');
+    setStatusText('🎙️ Mendengarkan... Silakan ucapkan perintah Anda:');
     setTranscript('');
     setAiResponse('');
 
-    // Web Speech Recognition Integration if on Web
     if (Platform.OS === 'web' && (window as any).webkitSpeechRecognition) {
       try {
+        if (recognitionRef.current) {
+          try { recognitionRef.current.stop(); } catch (e) {}
+        }
+
         const SpeechRecognition = (window as any).webkitSpeechRecognition;
         const recognition = new SpeechRecognition();
         recognition.lang = 'id-ID';
-        recognition.continuous = false;
-        recognition.interimResults = false;
+        recognition.continuous = true;
+        recognition.interimResults = true;
 
         recognition.onresult = (event: any) => {
-          const text = event.results[0][0].transcript;
-          setTranscript(text);
-          processCommand(text);
+          let currentTranscript = '';
+          for (let i = 0; i < event.results.length; i++) {
+            currentTranscript += event.results[i][0].transcript + ' ';
+          }
+          currentTranscript = currentTranscript.trim();
+          setTranscript(currentTranscript);
+          setStatusText('🗣️ Suara terdeteksi...');
+
+          // Reset silence debounce timer
+          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = setTimeout(() => {
+            if (currentTranscript.trim()) {
+              recognition.stop();
+              processCommand(currentTranscript.trim());
+            }
+          }, 1200);
         };
 
-        recognition.onerror = () => {
+        recognition.onerror = (err: any) => {
+          console.log('Speech rec error:', err);
           setIsListening(false);
-          setStatusText('Ketik atau pilih perintah di bawah:');
+          setStatusText('Ketuk orb atau pilih perintah di bawah:');
         };
 
         recognition.onend = () => {
@@ -116,17 +162,26 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
         };
 
         recognition.start();
+        recognitionRef.current = recognition;
       } catch (err) {
         console.log('Web speech error:', err);
       }
     }
   };
 
+  const stopListeningSession = () => {
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch (e) {}
+      recognitionRef.current = null;
+    }
+    setIsListening(false);
+  };
+
   const processCommand = async (commandText: string) => {
     if (!commandText.trim()) return;
 
-    setStatusText('🧠 Memproses perintah suara...');
-    setIsListening(false);
+    stopListeningSession();
+    setStatusText('🧠 IDHAM AI sedang memproses...');
 
     try {
       const result = await VoiceService.processVoiceCommand(commandText, currentClass);
@@ -134,7 +189,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       setAiResponse(result.responseText);
       setStatusText('🔊 IDHAM AI Menjawab:');
 
-      // Speak response aloud with Indonesian TTS
+      // Speak response aloud with natural Indonesian TTS
       setIsSpeaking(true);
       await VoiceService.speak(result.responseText);
       setIsSpeaking(false);
@@ -144,7 +199,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       }
     } catch (e) {
       console.error(e);
-      setStatusText('Maaf, saya tidak mengerti perintah tersebut.');
+      setStatusText('Maaf, ada kendala saat memproses perintah suara.');
     }
   };
 
@@ -153,11 +208,6 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       processCommand(transcript.trim());
     }
   };
-
-  const spin = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
 
   return (
     <Modal visible={visible} animationType="fade" transparent>
@@ -174,40 +224,47 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          {/* Pulsing AI Visualizer Orb */}
+          {/* Interactive Pulsing AI Orb */}
           <View style={styles.orbContainer}>
             <Animated.View
               style={[
                 styles.outerGlow,
-                {
-                  transform: [{ scale: pulseAnim }, { rotate: spin }],
-                },
-              ]}
-            />
-            <Animated.View
-              style={[
-                styles.middleRing,
-                {
-                  transform: [{ scale: pulseAnim }],
-                },
+                { transform: [{ scale: pulseAnim }] },
               ]}
             />
             <TouchableOpacity
               style={[styles.coreOrb, isListening && styles.listeningCoreOrb]}
-              onPress={handleStartListening}
-              activeOpacity={0.8}
+              onPress={() => {
+                if (isListening) {
+                  stopListeningSession();
+                } else {
+                  startListeningSession();
+                }
+              }}
+              activeOpacity={0.85}
             >
               <Text style={styles.orbIcon}>{isListening ? '🎙️' : '✨'}</Text>
             </TouchableOpacity>
           </View>
 
+          {/* Real-Time Sound Waveform Visualizer Bars */}
+          {isListening && (
+            <View style={styles.waveformContainer}>
+              <Animated.View style={[styles.waveBar, { transform: [{ scaleY: waveAnim1 }] }]} />
+              <Animated.View style={[styles.waveBar, { transform: [{ scaleY: waveAnim2 }] }]} />
+              <Animated.View style={[styles.waveBar, { transform: [{ scaleY: waveAnim3 }] }]} />
+              <Animated.View style={[styles.waveBar, { transform: [{ scaleY: waveAnim4 }] }]} />
+              <Animated.View style={[styles.waveBar, { transform: [{ scaleY: waveAnim5 }] }]} />
+            </View>
+          )}
+
           <Text style={styles.statusText}>{statusText}</Text>
 
-          {/* Transcript / AI Response Bubble */}
+          {/* Live Transcript & AI Response Box */}
           <View style={styles.dialogBox}>
             {transcript ? (
               <View style={styles.userBubble}>
-                <Text style={styles.userLabel}>Anda Ucapkan:</Text>
+                <Text style={styles.userLabel}>Terdeteksi:</Text>
                 <Text style={styles.userText}>"{transcript}"</Text>
               </View>
             ) : null}
@@ -219,7 +276,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
               </ScrollView>
             ) : (
               <Text style={styles.hintText}>
-                💡 Contoh ucapan: *"Hai Idham, jadwal hari ini apa?"* atau *"Buka absensi"*
+                💡 Suara Anda akan langsung terdeteksi otomatis begitu Anda berbicara.
               </Text>
             )}
           </View>
@@ -245,8 +302,8 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
           <View style={styles.inputRow}>
             <TextInput
               style={styles.input}
-              placeholder="Atau ketik perintah di sini..."
-              placeholderTextColor={COLORS.textLight}
+              placeholder="Ketik perintah di sini..."
+              placeholderTextColor="#64748B"
               value={transcript}
               onChangeText={setTranscript}
               onSubmitEditing={handleManualSubmit}
@@ -269,7 +326,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    backgroundColor: 'rgba(15, 23, 42, 0.88)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
@@ -285,14 +342,14 @@ const styles = StyleSheet.create({
     elevation: 10,
     shadowColor: '#E11D48',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   badgeRow: {
     flexDirection: 'row',
@@ -320,7 +377,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   orbContainer: {
-    height: 140,
+    height: 120,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -328,25 +385,17 @@ const styles = StyleSheet.create({
   },
   outerGlow: {
     position: 'absolute',
-    width: 130,
-    height: 130,
-    borderRadius: 65,
-    backgroundColor: 'rgba(217, 0, 0, 0.25)',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(225, 29, 72, 0.25)',
     borderWidth: 2,
-    borderColor: 'rgba(239, 68, 68, 0.4)',
-    borderStyle: 'dashed',
-  },
-  middleRing: {
-    position: 'absolute',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(225, 29, 72, 0.35)',
+    borderColor: 'rgba(244, 63, 94, 0.4)',
   },
   coreOrb: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -359,21 +408,35 @@ const styles = StyleSheet.create({
     borderColor: '#6EE7B7',
   },
   orbIcon: {
-    fontSize: 28,
+    fontSize: 30,
+  },
+  waveformContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 24,
+    marginBottom: 6,
+  },
+  waveBar: {
+    width: 4,
+    height: 20,
+    backgroundColor: '#38BDF8',
+    borderRadius: 2,
   },
   statusText: {
     color: '#E2E8F0',
     fontSize: 12,
     fontWeight: '600',
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   dialogBox: {
     backgroundColor: '#1E293B',
     borderRadius: 16,
     padding: 12,
     minHeight: 100,
-    maxHeight: 180,
+    maxHeight: 170,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#334155',
@@ -424,7 +487,7 @@ const styles = StyleSheet.create({
   },
   presetsRow: {
     flexDirection: 'row',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   presetChip: {
     backgroundColor: '#1E293B',

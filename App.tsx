@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import {
   StyleSheet,
@@ -6,9 +6,7 @@ import {
   Text,
   TouchableOpacity,
   SafeAreaView,
-  Alert,
   Platform,
-  Animated,
 } from 'react-native';
 import * as Updates from 'expo-updates';
 import { COLORS } from './src/constants/theme';
@@ -21,8 +19,7 @@ import { VoiceAssistantModal } from './src/components/VoiceAssistantModal';
 import { StorageService } from './src/services/storage';
 import { NotificationService } from './src/services/notificationService';
 import { CloudSyncService } from './src/services/cloudSync';
-import { getTimeBasedGreeting } from './src/components/Header';
-import { VoiceCommandResult } from './src/services/voiceService';
+import { VoiceCommandResult, VoiceService } from './src/services/voiceService';
 
 type TabName = 'chat' | 'schedule' | 'attendance' | 'meeting' | 'settings';
 
@@ -30,10 +27,16 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabName>('chat');
   const [currentClass, setCurrentClass] = useState('XII PPLG 3');
   const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const wakeWordRecognitionRef = useRef<any>(null);
 
   useEffect(() => {
     initApp();
     checkForUpdatesAutomatically();
+    startBackgroundWakeWordListener();
+
+    return () => {
+      stopBackgroundWakeWordListener();
+    };
   }, []);
 
   const initApp = async () => {
@@ -50,6 +53,7 @@ export default function App() {
     }
   };
 
+  // Instant Automatic OTA Update without waiting
   const checkForUpdatesAutomatically = async () => {
     if (__DEV__ || Platform.OS === 'web') return;
 
@@ -57,22 +61,55 @@ export default function App() {
       const update = await Updates.checkForUpdateAsync();
       if (update.isAvailable) {
         await Updates.fetchUpdateAsync();
-        Alert.alert(
-          'Pembaruan Baru Tersedia! 🚀',
-          'Aplikasi telah mengunduh pembaruan terbaru. Muat ulang sekarang untuk menerapkan?',
-          [
-            { text: 'Nanti', style: 'cancel' },
-            {
-              text: 'Muat Ulang',
-              onPress: async () => {
-                await Updates.reloadAsync();
-              },
-            },
-          ]
-        );
+        // Automatically reload smoothly
+        await Updates.reloadAsync();
       }
     } catch (error) {
-      console.log('Error checking updates:', error);
+      console.log('Auto update check error:', error);
+    }
+  };
+
+  // Passive In-App Wake-Word Detection ("Hai Idham" / "Halo Idham")
+  const startBackgroundWakeWordListener = () => {
+    if (Platform.OS === 'web' && (window as any).webkitSpeechRecognition) {
+      try {
+        const SpeechRecognition = (window as any).webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'id-ID';
+        recognition.continuous = true;
+        recognition.interimResults = true;
+
+        recognition.onresult = (event: any) => {
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const text = event.results[i][0].transcript;
+            if (VoiceService.isWakeWord(text)) {
+              setShowVoiceModal(true);
+              break;
+            }
+          }
+        };
+
+        recognition.onerror = () => {
+          // Silent restart
+        };
+
+        recognition.onend = () => {
+          // Re-listen in background
+          try {
+            if (!showVoiceModal) recognition.start();
+          } catch (e) {}
+        };
+
+        recognition.start();
+        wakeWordRecognitionRef.current = recognition;
+      } catch (err) {}
+    }
+  };
+
+  const stopBackgroundWakeWordListener = () => {
+    if (wakeWordRecognitionRef.current) {
+      try { wakeWordRecognitionRef.current.stop(); } catch (e) {}
+      wakeWordRecognitionRef.current = null;
     }
   };
 
@@ -161,9 +198,10 @@ export default function App() {
         </View>
       </TouchableOpacity>
 
-      {/* Modern & Sleek Bottom Navigation Bar */}
+      {/* Ultra-Clean & Refined Bottom Navigation Bar */}
       <SafeAreaView style={styles.bottomNavSafe}>
         <View style={styles.bottomNav}>
+          {/* Tab 1: Bot Chat */}
           <TouchableOpacity
             style={[styles.navItem, activeTab === 'chat' && styles.activeNavItem]}
             onPress={() => setActiveTab('chat')}
@@ -172,16 +210,12 @@ export default function App() {
             <View style={[styles.iconWrapper, activeTab === 'chat' && styles.activeIconWrapper]}>
               <Text style={styles.navIcon}>💬</Text>
             </View>
-            <Text
-              style={[
-                styles.navLabel,
-                activeTab === 'chat' && styles.activeNavLabel,
-              ]}
-            >
-              Bot Chat
+            <Text style={[styles.navLabel, activeTab === 'chat' && styles.activeNavLabel]}>
+              Chat
             </Text>
           </TouchableOpacity>
 
+          {/* Tab 2: Jadwal */}
           <TouchableOpacity
             style={[styles.navItem, activeTab === 'schedule' && styles.activeNavItem]}
             onPress={() => setActiveTab('schedule')}
@@ -190,17 +224,12 @@ export default function App() {
             <View style={[styles.iconWrapper, activeTab === 'schedule' && styles.activeIconWrapper]}>
               <Text style={styles.navIcon}>📅</Text>
             </View>
-            <Text
-              style={[
-                styles.navLabel,
-                activeTab === 'schedule' && styles.activeNavLabel,
-              ]}
-            >
+            <Text style={[styles.navLabel, activeTab === 'schedule' && styles.activeNavLabel]}>
               Jadwal
             </Text>
           </TouchableOpacity>
 
-          {/* 📍 Tab Absensi Mandiri Digits Telkom */}
+          {/* Tab 3: 📍 Absensi Mandiri Digits Telkom */}
           <TouchableOpacity
             style={[styles.navItem, activeTab === 'attendance' && styles.activeNavItem]}
             onPress={() => setActiveTab('attendance')}
@@ -209,16 +238,12 @@ export default function App() {
             <View style={[styles.iconWrapper, activeTab === 'attendance' && styles.activeIconWrapper]}>
               <Text style={styles.navIcon}>📍</Text>
             </View>
-            <Text
-              style={[
-                styles.navLabel,
-                activeTab === 'attendance' && styles.activeNavLabel,
-              ]}
-            >
+            <Text style={[styles.navLabel, activeTab === 'attendance' && styles.activeNavLabel]}>
               Absensi
             </Text>
           </TouchableOpacity>
 
+          {/* Tab 4: Tugas */}
           <TouchableOpacity
             style={[styles.navItem, activeTab === 'meeting' && styles.activeNavItem]}
             onPress={() => setActiveTab('meeting')}
@@ -227,16 +252,12 @@ export default function App() {
             <View style={[styles.iconWrapper, activeTab === 'meeting' && styles.activeIconWrapper]}>
               <Text style={styles.navIcon}>📝</Text>
             </View>
-            <Text
-              style={[
-                styles.navLabel,
-                activeTab === 'meeting' && styles.activeNavLabel,
-              ]}
-            >
+            <Text style={[styles.navLabel, activeTab === 'meeting' && styles.activeNavLabel]}>
               Tugas
             </Text>
           </TouchableOpacity>
 
+          {/* Tab 5: Setelan */}
           <TouchableOpacity
             style={[styles.navItem, activeTab === 'settings' && styles.activeNavItem]}
             onPress={() => setActiveTab('settings')}
@@ -245,12 +266,7 @@ export default function App() {
             <View style={[styles.iconWrapper, activeTab === 'settings' && styles.activeIconWrapper]}>
               <Text style={styles.navIcon}>⚙️</Text>
             </View>
-            <Text
-              style={[
-                styles.navLabel,
-                activeTab === 'settings' && styles.activeNavLabel,
-              ]}
-            >
+            <Text style={[styles.navLabel, activeTab === 'settings' && styles.activeNavLabel]}>
               Setelan
             </Text>
           </TouchableOpacity>
@@ -278,7 +294,7 @@ const styles = StyleSheet.create({
   },
   floatingVoiceBtn: {
     position: 'absolute',
-    bottom: 74,
+    bottom: 72,
     right: 16,
     zIndex: 99,
     elevation: 8,
@@ -310,51 +326,50 @@ const styles = StyleSheet.create({
   bottomNavSafe: {
     backgroundColor: COLORS.white,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    elevation: 8,
+    borderTopColor: '#F1F5F9',
+    elevation: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.08,
-    shadowRadius: 6,
+    shadowRadius: 8,
   },
   bottomNav: {
     flexDirection: 'row',
-    height: 62,
+    height: 58,
     backgroundColor: COLORS.white,
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingHorizontal: 6,
-    paddingBottom: 2,
+    paddingHorizontal: 4,
   },
   navItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 5,
-    borderRadius: 14,
-    marginHorizontal: 2,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginHorizontal: 1,
   },
   activeNavItem: {
     backgroundColor: '#FEF2F2',
   },
   iconWrapper: {
-    width: 36,
-    height: 26,
+    width: 32,
+    height: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 13,
+    borderRadius: 12,
   },
   activeIconWrapper: {
     backgroundColor: COLORS.primaryLight,
   },
   navIcon: {
-    fontSize: 18,
+    fontSize: 17,
   },
   navLabel: {
     fontSize: 10,
     fontWeight: '600',
     color: '#64748B',
-    marginTop: 2,
+    marginTop: 1,
   },
   activeNavLabel: {
     color: COLORS.primary,
