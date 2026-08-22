@@ -45,11 +45,11 @@ export const SUBJECT_MAP: { [code: string]: string } = {
 };
 
 export const UNIFORMS: { [day: string]: string } = {
-  senin: 'Seragam Osis Lengkap',
-  selasa: 'Seragam Osis Lengkap',
-  rabu: 'Seragam Identitas SMK Telkom',
-  kamis: 'Seragam Batik TS (Batik Bebas di Kamis Minggu ke-3)',
-  jumat: 'Seragam Pramuka',
+  senin: 'OSIS LENGKAP',
+  selasa: 'Identitas Telkom',
+  rabu: 'Batik TS',
+  kamis: 'Praktek Telkom',
+  jumat: 'Pramuka Lengkap',
 };
 
 // Data Jadwal Lengkap Kelas Default: XII PPLG 3

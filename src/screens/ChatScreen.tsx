@@ -21,8 +21,8 @@ import { MeetingModal } from '../components/MeetingModal';
 import { TaskModal } from '../components/TaskModal';
 import { KnowledgeModal } from '../components/KnowledgeModal';
 import { OverrideModal } from '../components/OverrideModal';
+import { AttendanceModal } from '../components/AttendanceModal';
 import { generateBotResponse } from '../bot/responseFormatter';
-import { KnowledgeService } from '../services/knowledgeService';
 import { StorageService } from '../services/storage';
 import { NotificationService } from '../services/notificationService';
 
@@ -42,6 +42,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
   const [showKnowledgeModal, setShowKnowledgeModal] = useState(false);
   const [showOverrideModal, setShowOverrideModal] = useState(false);
   const [overrideModalData, setOverrideModalData] = useState<any>(null);
+  const [showAttendanceModal, setShowAttendanceModal] = useState(false);
 
   const flatListRef = useRef<FlatList>(null);
 
@@ -57,9 +58,9 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
       const welcomeMsg: ChatMessage = {
         id: '1',
         sender: 'bot',
-        text: `Halo Idham! 👋\n\nSaya asisten jadwal & tugas offline untuk kelas **${currentClass}** (SMK Telkom Purwokerto).\n\n• Tanyakan jadwal kelas & ruangan.\n• Catat tugas sekolah dan lampirkan filenya.\n• Upload file materi/catatan dengan tombol 📎 agar saya pelajari dan bisa menjawab pertanyaan Anda!`,
+        text: `Halo Idham! 👋\n\nSaya asisten jadwal & tugas offline untuk kelas **${currentClass}** (SMK Telkom Purwokerto).\n\n• Tanyakan jadwal kelas & ruangan.\n• Catat tugas sekolah dan lampirkan filenya.\n• Lakukan presensi mandiri (Absen Masuk/Pulang).\n• Upload file materi/catatan dengan tombol 📎 agar saya pelajari!`,
         timestamp: formatCurrentTime(),
-        quickReplies: ['📅 Jadwal Hari Ini', '📝 Daftar Tugas', '📍 Ruangan Sekarang', '📎 Upload File Belajar'],
+        quickReplies: ['📅 Jadwal Hari Ini', '📍 Absen Online', '📝 Daftar Tugas', '👕 Seragam Hari Ini'],
       };
       setMessages([welcomeMsg]);
       await StorageService.saveChats([welcomeMsg]);
@@ -117,6 +118,8 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
       } else if (botRes.openModal === 'override') {
         setOverrideModalData(botRes.modalData);
         setShowOverrideModal(true);
+      } else if (botRes.openModal === 'attendance') {
+        setShowAttendanceModal(true);
       }
     } catch (e) {
       console.error(e);
@@ -136,7 +139,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
       sender: 'bot',
       text: `✅ **Agenda Meeting Tersimpan!**\n\n📌 **${meeting.title}**\n📅 ${meeting.date} pukul ${meeting.time} WIB\n📍 Lokasi: ${meeting.location}\n\nPengingat telah aktif!`,
       timestamp: formatCurrentTime(),
-      quickReplies: ['📋 Lihat Semua Agenda', '📅 Jadwal Hari Ini'],
+      quickReplies: ['📋 Lihat Semua Agenda', '📅 Jadwal Hari Ini', '↩️ Batalkan'],
     };
     const updated = [...messages, confirmMsg];
     setMessages(updated);
@@ -154,7 +157,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
         fileText +
         `\n\nAnda akan diingatkan sebelum batas waktu pengumpulan tugas tiba.`,
       timestamp: formatCurrentTime(),
-      quickReplies: ['📝 Lihat Semua Tugas', '📅 Jadwal Hari Ini'],
+      quickReplies: ['📝 Lihat Semua Tugas', '📅 Jadwal Hari Ini', '↩️ Batalkan'],
     };
     const updated = [...messages, confirmMsg];
     setMessages(updated);
@@ -182,7 +185,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
       sender: 'bot',
       text: `✅ **Jadwal Berhasil Diperbarui!**\n\n📅 Hari: **${override.day.toUpperCase()}** (Jam ke-${override.period})\n🏫 Ruangan: **${override.newRoom || 'Sesuai'}**\n📖 Mapel: **${override.newSubjectName || override.newSubjectCode || 'Sesuai'}**`,
       timestamp: formatCurrentTime(),
-      quickReplies: [`📅 Cek Jadwal ${override.day}`, '📍 Ruangan Sekarang'],
+      quickReplies: [`📅 Cek Jadwal ${override.day}`, '📍 Ruangan Sekarang', '↩️ Batalkan (Undo)'],
     };
     const updated = [...messages, confirmMsg];
     setMessages(updated);
@@ -210,7 +213,13 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
           renderItem={({ item }) => (
             <ChatBubble
               message={item}
-              onQuickReplyPress={reply => handleSendMessage(reply)}
+              onQuickReplyPress={reply => {
+                if (reply === '📍 Buka Menu Presensi' || reply === '📍 Absen Online') {
+                  setShowAttendanceModal(true);
+                } else {
+                  handleSendMessage(reply);
+                }
+              }}
             />
           )}
           contentContainerStyle={styles.messageList}
@@ -225,7 +234,15 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
           </View>
         )}
 
-        <QuickChips onSelect={chip => handleSendMessage(chip)} />
+        <QuickChips
+          onSelect={chip => {
+            if (chip === '📍 Absen Online' || chip === '📍 Ruangan Sekarang' && chip.includes('Absen')) {
+              setShowAttendanceModal(true);
+            } else {
+              handleSendMessage(chip);
+            }
+          }}
+        />
 
         <View style={styles.inputBar}>
           {/* File Upload Button to Teach Bot */}
@@ -237,9 +254,18 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
             <Text style={styles.attachIcon}>📎</Text>
           </TouchableOpacity>
 
+          {/* Quick Attendance Icon */}
+          <TouchableOpacity
+            style={styles.attachBtn}
+            onPress={() => setShowAttendanceModal(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.attachIcon}>📍</Text>
+          </TouchableOpacity>
+
           <TextInput
             style={styles.textInput}
-            placeholder="Tanya jadwal, tugas, atau materi..."
+            placeholder="Tanya jadwal, tugas, absen, seragam..."
             placeholderTextColor={COLORS.textLight}
             value={inputText}
             onChangeText={setInputText}
@@ -257,6 +283,11 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      <AttendanceModal
+        visible={showAttendanceModal}
+        onClose={() => setShowAttendanceModal(false)}
+      />
 
       <KnowledgeModal
         visible={showKnowledgeModal}
@@ -319,12 +350,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-    gap: 8,
+    gap: 6,
   },
   attachBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: COLORS.primaryLight,
     borderWidth: 1,
     borderColor: COLORS.primaryBadge,
@@ -332,23 +363,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   attachIcon: {
-    fontSize: 18,
+    fontSize: 16,
   },
   textInput: {
     flex: 1,
     backgroundColor: COLORS.background,
     borderRadius: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    fontSize: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    fontSize: 13,
     color: COLORS.textDark,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   sendButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -359,7 +390,7 @@ const styles = StyleSheet.create({
   },
   sendIcon: {
     color: COLORS.white,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
   },
 });

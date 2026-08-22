@@ -8,12 +8,12 @@ interface QuickChipsProps {
 
 const DEFAULT_CHIPS = [
   '📅 Jadwal Hari Ini',
-  '📍 Ruangan Sekarang',
+  '📍 Absen Online',
   '👕 Seragam Hari Ini',
-  '📋 Jadwal Besok',
   '📝 Daftar Tugas',
-  '📌 Daftar Meeting',
-  '📎 Upload File',
+  '📍 Ruangan Sekarang',
+  '📋 Jadwal Besok',
+  '↩️ Undo',
   '❓ Bantuan',
 ];
 
@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    paddingRight: 24, // Extra right padding so last chip is never clipped
+    paddingRight: 24,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,

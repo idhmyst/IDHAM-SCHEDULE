@@ -1,15 +1,30 @@
 import * as Notifications from 'expo-notifications';
 import { Platform, Vibration } from 'react-native';
+import { Audio } from 'expo-av';
 import { DayName, DaySchedule, MeetingAgenda, ScheduleItem, TaskAssignment } from '../types';
 import { ScheduleService } from './scheduleService';
 import { StorageService } from './storage';
 
+// In-app audio chime player for notif ringtone.mp3
+export const playNotificationRingtone = async () => {
+  if (Platform.OS === 'web') return;
+  try {
+    const { sound } = await Audio.Sound.createAsync(
+      require('../../assets/notif_ringtone.mp3')
+    );
+    await sound.playAsync();
+  } catch (err) {
+    console.log('Error playing custom ringtone:', err);
+  }
+};
+
 Notifications.setNotificationHandler({
   handleNotification: async () => {
-    // Explicit vibration on arrival
+    // Explicit vibration and custom ringtone playback on arrival
     if (Platform.OS !== 'web') {
       try {
-        Vibration.vibrate([0, 500, 250, 500]);
+        Vibration.vibrate([0, 800, 300, 800, 300, 1000]);
+        playNotificationRingtone();
       } catch (e) {}
     }
     return {
@@ -63,7 +78,7 @@ export const NotificationService = {
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 800, 300, 800, 300, 1000],
         lightColor: '#D90000',
-        sound: 'default',
+        sound: 'notification.mp3',
         enableVibrate: true,
         enableLights: true,
         bypassDnd: true,
@@ -76,7 +91,7 @@ export const NotificationService = {
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 800, 300, 800, 300, 1000],
         lightColor: '#D90000',
-        sound: 'default',
+        sound: 'notification.mp3',
         enableVibrate: true,
         enableLights: true,
         bypassDnd: true,
@@ -142,7 +157,7 @@ export const NotificationService = {
               content: {
                 title: `🔔 Mapel Berikutnya: ${item.subjectCode} (${item.subjectName})`,
                 body: `Mulai ${reminderText} (${item.startTime} WIB) di Ruang ${item.room}. Jangan terlambat!`,
-                sound: 'default',
+                sound: 'notification.mp3',
                 vibrate: [0, 800, 300, 800, 300, 1000],
                 data: { type: 'schedule', itemId: item.id, offset: minutesBefore },
               },
@@ -178,7 +193,7 @@ export const NotificationService = {
               content: {
                 title: `📌 Agenda Meeting: ${meeting.title}`,
                 body: `Mulai ${reminderText} (${meeting.time} WIB) di ${meeting.location}.`,
-                sound: 'default',
+                sound: 'notification.mp3',
                 vibrate: [0, 800, 300, 800, 300, 1000],
                 data: { type: 'meeting', meetingId: meeting.id, offset: minutesBefore },
               },
@@ -216,7 +231,7 @@ export const NotificationService = {
               content: {
                 title: `⚠️ Deadline Tugas: ${task.title} [${task.subject}]`,
                 body: `Batas pengumpulan ${reminderText} (${task.deadlineTime} WIB). ${fileStatus}`,
-                sound: 'default',
+                sound: 'notification.mp3',
                 vibrate: [0, 800, 300, 800, 300, 1000],
                 data: { type: 'task', taskId: task.id, offset: minutesBefore },
               },
@@ -239,9 +254,10 @@ export const NotificationService = {
       return;
     }
 
-    // Trigger explicit physical vibration on device
+    // Play explicit custom audio ringtone & vibration
     try {
       Vibration.vibrate([0, 800, 300, 800, 300, 1000]);
+      await playNotificationRingtone();
     } catch (e) {}
 
     await this.requestPermissions();
@@ -249,7 +265,7 @@ export const NotificationService = {
       content: {
         title: '🔔 Test Pengingat IDHAM SCHEDULE',
         body: 'Notifikasi bersuara & getar berhasil diuji! Anda akan diingatkan tepat waktu.',
-        sound: 'default',
+        sound: 'notification.mp3',
         vibrate: [0, 800, 300, 800, 300, 1000],
       },
       trigger: null,
