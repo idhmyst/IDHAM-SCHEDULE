@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Meeting {
+  id          String   @id @default(cuid())
+  title       String
+  date        String
+  time        String
+  location    String   @default("Sekolah")
+  notes       String?
+  isCompleted Boolean  @default(false) @map("is_completed")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("meetings")
+}
+
+model ScheduleOverride {
+  id             String   @id @default(cuid())
+  className      String   @map("class_name")
+  day            String
+  period         Int
+  newSubjectCode String?  @map("new_subject_code")
+  newSubjectName String?  @map("new_subject_name")
+  newRoom        String?  @map("new_room")
+  note           String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("schedule_overrides")
+}
+
+model ChatLog {
+  id          String   @id @default(cuid())
+  sender      String
+  messageText String   @map("message_text")
+  actionType  String?  @map("action_type")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("chat_logs")
+}
