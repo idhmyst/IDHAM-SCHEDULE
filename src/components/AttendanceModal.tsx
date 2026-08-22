@@ -23,6 +23,7 @@ import {
   SavedLocation,
   StudentAuth,
 } from '../services/attendanceService';
+import { MapPickerModal } from './MapPickerModal';
 
 interface AttendanceModalProps {
   visible: boolean;
@@ -41,13 +42,14 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Locations & Search
+  // Locations & Map Picker
   const [locations, setLocations] = useState<SavedLocation[]>([]);
   const [selectedLoc, setSelectedLoc] = useState<SavedLocation | null>(null);
   const [locationSearch, setLocationSearch] = useState('');
   const [apiSearchResults, setApiSearchResults] = useState<SavedLocation[]>([]);
   const [isSearchingApi, setIsSearchingApi] = useState(false);
   const [showAddLocation, setShowAddLocation] = useState(false);
+  const [showMapPicker, setShowMapPicker] = useState(false);
   const [newLocName, setNewLocName] = useState('');
   const [newLocLat, setNewLocLat] = useState('-7.433924');
   const [newLocLng, setNewLocLng] = useState('109.248612');
@@ -168,6 +170,15 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
         },
       ]
     );
+  };
+
+  // Map Picker Result Handler
+  const handleSelectFromMap = async (loc: SavedLocation) => {
+    await AttendanceService.saveLocation(loc);
+    const list = await AttendanceService.getLocations();
+    setLocations(list);
+    setSelectedLoc(loc);
+    Alert.alert('Lokasi Terpasang! 📍', `Titik ${loc.name} (${loc.latitude}, ${loc.longitude}) siap digunakan untuk presensi.`);
   };
 
   // Friends CRUD
@@ -425,6 +436,22 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
                       ))}
                     </ScrollView>
 
+                    {/* Open Visual Interactive Map Button */}
+                    <TouchableOpacity
+                      style={styles.openMapBanner}
+                      onPress={() => setShowMapPicker(true)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.openMapBannerIcon}>🗺️</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.openMapBannerTitle}>Pilih Titik di Peta Interaktif</Text>
+                        <Text style={styles.openMapBannerSub}>
+                          Buka peta Leaflet OpenStreetMap & geser pin ke lokasi Anda
+                        </Text>
+                      </View>
+                      <Text style={styles.openMapArrow}>Buka Peta ➔</Text>
+                    </TouchableOpacity>
+
                     <Text style={styles.sectionLabel}>Titik Lokasi Presensi Terpilih:</Text>
                     <View style={styles.selectedLocCard}>
                       <View style={styles.selectedLocInfo}>
@@ -442,9 +469,9 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
                       </View>
                       <TouchableOpacity
                         style={styles.changeLocBtn}
-                        onPress={() => setActiveTab('locations')}
+                        onPress={() => setShowMapPicker(true)}
                       >
-                        <Text style={styles.changeLocText}>Ganti 🗺️</Text>
+                        <Text style={styles.changeLocText}>Peta 🗺️</Text>
                       </TouchableOpacity>
                     </View>
 
@@ -642,9 +669,25 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
               </View>
             )}
 
-            {/* 3. LOCATIONS TAB (Dengan Pencarian API Geocoding Resmi) */}
+            {/* 3. LOCATIONS TAB (Dengan Peta Interaktif & Pencarian API) */}
             {activeTab === 'locations' && (
               <View style={styles.tabContent}>
+                {/* Big Button: Open Map */}
+                <TouchableOpacity
+                  style={styles.openMapLargeBtn}
+                  onPress={() => setShowMapPicker(true)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.openMapLargeIcon}>🗺️</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.openMapLargeTitle}>Buka Peta Satelit & Pilih Titik Pin</Text>
+                    <Text style={styles.openMapLargeSub}>
+                      Geser peta Leaflet CartoDB untuk memilih koordinat presisi tinggi
+                    </Text>
+                  </View>
+                  <Text style={styles.openMapLargeBadge}>BUKA ➔</Text>
+                </TouchableOpacity>
+
                 <View style={styles.searchRow}>
                   <TextInput
                     style={styles.searchInput}
@@ -675,7 +718,6 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
                   </TouchableOpacity>
                 </View>
 
-                {/* API Search Results Box */}
                 {apiSearchResults.length > 0 && (
                   <View style={styles.apiResultBox}>
                     <Text style={styles.apiResultTitle}>Hasil Pencarian API Geocoding:</Text>
@@ -851,6 +893,13 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      <MapPickerModal
+        visible={showMapPicker}
+        initialLocation={selectedLoc}
+        onClose={() => setShowMapPicker(false)}
+        onSelectLocation={handleSelectFromMap}
+      />
     </Modal>
   );
 };
@@ -962,6 +1011,63 @@ const styles = StyleSheet.create({
   activeTargetChipText: {
     color: COLORS.primary,
     fontWeight: 'bold',
+  },
+  openMapBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1.5,
+    borderColor: '#93C5FD',
+    borderRadius: 12,
+    padding: 10,
+    gap: 8,
+  },
+  openMapBannerIcon: {
+    fontSize: 22,
+  },
+  openMapBannerTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#1E40AF',
+  },
+  openMapBannerSub: {
+    fontSize: 10,
+    color: '#3B82F6',
+  },
+  openMapArrow: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#1D4ED8',
+  },
+  openMapLargeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E3A8A',
+    borderRadius: 14,
+    padding: 14,
+    gap: 10,
+  },
+  openMapLargeIcon: {
+    fontSize: 26,
+  },
+  openMapLargeTitle: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: COLORS.white,
+  },
+  openMapLargeSub: {
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 2,
+  },
+  openMapLargeBadge: {
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#1E3A8A',
   },
   selectedLocCard: {
     flexDirection: 'row',
