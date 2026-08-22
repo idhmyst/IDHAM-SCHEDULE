@@ -8,7 +8,10 @@ import {
   SafeAreaView,
   Alert,
   Image,
+  ActivityIndicator,
+  Platform,
 } from 'react-native';
+import * as Updates from 'expo-updates';
 import { COLORS } from '../constants/theme';
 import { AVAILABLE_CLASSES } from '../data/masterSchedule';
 import { ScheduleOverride, UserSettings } from '../types';
@@ -34,6 +37,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 }) => {
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [overrides, setOverrides] = useState<ScheduleOverride[]>([]);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -73,6 +77,40 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const handleTestNotification = async () => {
     await NotificationService.sendInstantTestNotification();
+  };
+
+  const handleManualCheckUpdate = async () => {
+    if (__DEV__ || Platform.OS === 'web') {
+      Alert.alert('Info Update', 'Pengecekan live update berjalan di versi Standalone APK.');
+      return;
+    }
+
+    setCheckingUpdate(true);
+    try {
+      const update = await Updates.checkForUpdateAsync();
+      if (update.isAvailable) {
+        await Updates.fetchUpdateAsync();
+        Alert.alert(
+          'Pembaruan Ditemukan! 🚀',
+          'Pembaruan terbaru berhasil diunduh. Tekan Muat Ulang untuk menerapkan seketika.',
+          [
+            { text: 'Nanti', style: 'cancel' },
+            {
+              text: 'Muat Ulang',
+              onPress: async () => {
+                await Updates.reloadAsync();
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Aplikasi Terkini ✨', 'Aplikasi IDHAM SCHEDULE Anda sudah menggunakan versi paling baru!');
+      }
+    } catch (err: any) {
+      Alert.alert('Info Update', 'Tidak dapat memeriksa update. Pastikan HP terhubung ke internet.');
+    } finally {
+      setCheckingUpdate(false);
+    }
   };
 
   const handleDeleteOverride = async (id: string) => {
@@ -115,8 +153,29 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <View style={styles.appInfo}>
             <Text style={styles.appName}>IDHAM SCHEDULE</Text>
             <Text style={styles.appDesc}>Asisten Jadwal & Agenda Offline</Text>
-            <Text style={styles.appVersion}>Versi 1.0.0 (Release APK)</Text>
+            <Text style={styles.appVersion}>Versi 1.0.0 (OTA Live Update Ready)</Text>
           </View>
+        </View>
+
+        {/* Section: Live Over-The-Air Update */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>PEMBARUAN APLIKASI (LIVE UPDATE)</Text>
+          <Text style={styles.sectionSubtitle}>
+            Aplikasi otomatis memeriksa update saat dibuka. Anda juga dapat memeriksa secara manual:
+          </Text>
+
+          <TouchableOpacity
+            style={styles.updateBtn}
+            onPress={handleManualCheckUpdate}
+            disabled={checkingUpdate}
+            activeOpacity={0.7}
+          >
+            {checkingUpdate ? (
+              <ActivityIndicator color={COLORS.white} />
+            ) : (
+              <Text style={styles.updateBtnText}>🔄 Periksa Pembaruan Sekarang</Text>
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* Section: Filter Pengingat / Notifikasi */}
@@ -284,6 +343,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textMuted,
     marginBottom: 14,
+  },
+  updateBtn: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  updateBtnText: {
+    color: COLORS.white,
+    fontSize: 13,
+    fontWeight: 'bold',
   },
   optionsRow: {
     flexDirection: 'row',

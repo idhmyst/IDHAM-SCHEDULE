@@ -6,7 +6,10 @@ import {
   Text,
   TouchableOpacity,
   SafeAreaView,
+  Alert,
+  Platform,
 } from 'react-native';
+import * as Updates from 'expo-updates';
 import { COLORS } from './src/constants/theme';
 import { ChatScreen } from './src/screens/ChatScreen';
 import { ScheduleScreen } from './src/screens/ScheduleScreen';
@@ -23,6 +26,7 @@ export default function App() {
 
   useEffect(() => {
     initApp();
+    checkForUpdatesAutomatically();
   }, []);
 
   const initApp = async () => {
@@ -31,6 +35,32 @@ export default function App() {
       setCurrentClass(s.defaultClass);
     }
     await NotificationService.scheduleAllReminders();
+  };
+
+  const checkForUpdatesAutomatically = async () => {
+    if (__DEV__ || Platform.OS === 'web') return;
+
+    try {
+      const update = await Updates.checkForUpdateAsync();
+      if (update.isAvailable) {
+        await Updates.fetchUpdateAsync();
+        Alert.alert(
+          'Pembaruan Baru Tersedia! 🚀',
+          'Aplikasi telah mengunduh pembaruan terbaru. Muat ulang sekarang untuk menerapkan?',
+          [
+            { text: 'Nanti', style: 'cancel' },
+            {
+              text: 'Muat Ulang',
+              onPress: async () => {
+                await Updates.reloadAsync();
+              },
+            },
+          ]
+        );
+      }
+    } catch (error) {
+      console.log('Error checking updates:', error);
+    }
   };
 
   const renderCurrentScreen = () => {
