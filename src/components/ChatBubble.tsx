@@ -85,16 +85,16 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   botAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     marginRight: 8,
     marginBottom: 4,
     borderWidth: 1,
     borderColor: COLORS.primaryLight,
   },
   bubble: {
-    maxWidth: '82%',
+    maxWidth: '88%',
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 18,
@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
   },
   messageText: {
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 21,
   },
   botText: {
     color: COLORS.textDark,
@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
   quickRepliesContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 8,
     marginTop: 10,
     paddingTop: 8,
     borderTopWidth: 1,
@@ -152,15 +152,18 @@ const styles = StyleSheet.create({
   },
   replyChip: {
     backgroundColor: COLORS.primaryLight,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORS.primaryBadge,
+    alignSelf: 'flex-start',
   },
   replyChipText: {
     color: COLORS.primary,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
 });

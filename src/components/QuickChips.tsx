@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { ScrollView, Text, TouchableOpacity, StyleSheet, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 
 interface QuickChipsProps {
@@ -11,53 +11,72 @@ const DEFAULT_CHIPS = [
   '📍 Ruangan Sekarang',
   '👕 Seragam Hari Ini',
   '📋 Jadwal Besok',
-  '📝 Daftar Meeting',
-  '❓ Panduan',
+  '📝 Daftar Tugas',
+  '📌 Daftar Meeting',
+  '📎 Upload File',
+  '❓ Bantuan',
 ];
 
 export const QuickChips: React.FC<QuickChipsProps> = ({ onSelect }) => {
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.container}
-    >
-      {DEFAULT_CHIPS.map((chip, index) => (
-        <TouchableOpacity
-          key={index}
-          style={styles.chip}
-          onPress={() => onSelect(chip)}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.chipText}>{chip}</Text>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
+    <View style={styles.wrapper}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+      >
+        {DEFAULT_CHIPS.map((chip, index) => (
+          <TouchableOpacity
+            key={index}
+            style={styles.chip}
+            onPress={() => onSelect(chip)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.chipText} numberOfLines={1} ellipsizeMode="clip">
+              {chip}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  wrapper: {
+    backgroundColor: COLORS.white,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+  },
   container: {
     paddingHorizontal: 12,
     paddingVertical: 8,
+    paddingRight: 24, // Extra right padding so last chip is never clipped
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
   },
   chip: {
-    backgroundColor: COLORS.white,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 16,
+    backgroundColor: COLORS.primaryLight,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.primaryBadge,
     elevation: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 1,
+    alignSelf: 'center',
+    flexShrink: 0,
   },
   chipText: {
-    color: COLORS.textBody,
+    color: COLORS.primary,
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '700',
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
 });
