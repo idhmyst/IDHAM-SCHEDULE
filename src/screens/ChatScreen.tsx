@@ -31,9 +31,14 @@ import { NotificationService } from '../services/notificationService';
 interface ChatScreenProps {
   currentClass: string;
   onOpenSettings?: () => void;
+  onOpenAttendance?: () => void;
 }
 
-export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSettings }) => {
+export const ChatScreen: React.FC<ChatScreenProps> = ({
+  currentClass,
+  onOpenSettings,
+  onOpenAttendance,
+}) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -62,9 +67,9 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
       const welcomeMsg: ChatMessage = {
         id: '1',
         sender: 'bot',
-        text: `Halo Idham! 👋\n\nSaya asisten jadwal, tugas & presensi offline untuk kelas **${currentClass}** (SMK Telkom Purwokerto).\n\n• Tanyakan jadwal kelas & ruangan.\n• Lakukan presensi mandiri (Absen Masuk/Pulang).\n• Cek insight kehadiran bulanan & download laporan PDF.\n• Masuk ke Akun Cloud Supabase agar data tidak hilang!`,
+        text: `Halo Idham! 👋\n\nSaya asisten jadwal, tugas & presensi offline untuk kelas **${currentClass}** (SMK Telkom Purwokerto).\n\n• Tanyakan jadwal kelas & ruangan.\n• Lakukan presensi mandiri (Absen Masuk/Pulang).\n• Cek insight kehadiran bulanan & download laporan PDF / Excel.\n• Masuk ke Akun Cloud Supabase agar data tidak hilang!`,
         timestamp: formatCurrentTime(),
-        quickReplies: ['📅 Jadwal Hari Ini', '📊 Insight & PDF', '📍 Absen Online', '📝 Daftar Tugas', '☁️ Akun Cloud'],
+        quickReplies: ['📅 Jadwal Hari Ini', '📍 Absen Online', '📊 Insight & PDF', '📝 Daftar Tugas', '☁️ Akun Cloud'],
       };
       setMessages([welcomeMsg]);
       await StorageService.saveChats([welcomeMsg]);
@@ -74,6 +79,14 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
   const formatCurrentTime = () => {
     const d = new Date();
     return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+  };
+
+  const handleOpenAttendanceAction = () => {
+    if (onOpenAttendance) {
+      onOpenAttendance();
+    } else {
+      setShowAttendanceModal(true);
+    }
   };
 
   const handleSendMessage = async (textToSend?: string) => {
@@ -123,7 +136,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
         setOverrideModalData(botRes.modalData);
         setShowOverrideModal(true);
       } else if (botRes.openModal === 'attendance') {
-        setShowAttendanceModal(true);
+        handleOpenAttendanceAction();
       } else if (botRes.openModal === 'report') {
         setShowReportModal(true);
       } else if (botRes.openModal === 'auth') {
@@ -207,6 +220,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
         subtitle="Offline AI Assistant"
         currentClass={currentClass}
         onClassPress={onOpenSettings}
+        onAttendancePress={handleOpenAttendanceAction}
       />
 
       <KeyboardAvoidingView
@@ -223,7 +237,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
               message={item}
               onQuickReplyPress={reply => {
                 if (reply === '📍 Buka Menu Presensi' || reply === '📍 Absen Online') {
-                  setShowAttendanceModal(true);
+                  handleOpenAttendanceAction();
                 } else if (reply === '📄 Buka Laporan PDF' || reply === '📊 Insight & PDF') {
                   setShowReportModal(true);
                 } else if (reply === '☁️ Buka Menu Cloud' || reply === '☁️ Akun Cloud') {
@@ -249,7 +263,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
         <QuickChips
           onSelect={chip => {
             if (chip === '📍 Absen Online') {
-              setShowAttendanceModal(true);
+              handleOpenAttendanceAction();
             } else if (chip === '📊 Insight & PDF') {
               setShowReportModal(true);
             } else if (chip === '☁️ Akun Cloud') {
@@ -273,7 +287,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
           {/* Quick Attendance Icon */}
           <TouchableOpacity
             style={styles.attachBtn}
-            onPress={() => setShowAttendanceModal(true)}
+            onPress={handleOpenAttendanceAction}
             activeOpacity={0.7}
           >
             <Text style={styles.attachIcon}>📍</Text>

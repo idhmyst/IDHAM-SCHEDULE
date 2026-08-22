@@ -19,6 +19,7 @@ import { StorageService } from '../services/storage';
 interface ScheduleScreenProps {
   currentClass: string;
   onOpenSettings?: () => void;
+  onOpenAttendance?: () => void;
 }
 
 const DAYS: { key: DayName; label: string }[] = [
@@ -32,6 +33,7 @@ const DAYS: { key: DayName; label: string }[] = [
 export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
   currentClass,
   onOpenSettings,
+  onOpenAttendance,
 }) => {
   const [selectedDay, setSelectedDay] = useState<DayName>('senin');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -126,6 +128,7 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
         subtitle="Timeline Interaktif"
         currentClass={currentClass}
         onClassPress={onOpenSettings}
+        onAttendancePress={onOpenAttendance}
       />
 
       {/* Calendar Header Month */}

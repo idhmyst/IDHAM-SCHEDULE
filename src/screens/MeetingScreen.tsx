@@ -22,6 +22,7 @@ import { NotificationService } from '../services/notificationService';
 interface MeetingScreenProps {
   currentClass: string;
   onOpenSettings?: () => void;
+  onOpenAttendance?: () => void;
 }
 
 type DateFilterType = 'all' | 'today' | 'tomorrow' | 'this_week';
@@ -29,6 +30,7 @@ type DateFilterType = 'all' | 'today' | 'tomorrow' | 'this_week';
 export const MeetingScreen: React.FC<MeetingScreenProps> = ({
   currentClass,
   onOpenSettings,
+  onOpenAttendance,
 }) => {
   const [section, setSection] = useState<'tasks' | 'meetings'>('tasks');
   const [meetings, setMeetings] = useState<MeetingAgenda[]>([]);
@@ -166,10 +168,11 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({
   return (
     <SafeAreaView style={styles.container}>
       <Header
-        title="TUGAS & AGENDA"
+        title="AGENDA & TUGAS"
         subtitle="Deadline & Janji Temu"
         currentClass={currentClass}
         onClassPress={onOpenSettings}
+        onAttendancePress={onOpenAttendance}
       />
 
       {/* Section Switcher: Tugas vs Meeting */}

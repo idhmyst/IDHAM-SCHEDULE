@@ -71,6 +71,7 @@ export default function App() {
           <ChatScreen
             currentClass={currentClass}
             onOpenSettings={() => setActiveTab('settings')}
+            onOpenAttendance={() => setActiveTab('attendance')}
           />
         );
       case 'schedule':
@@ -78,6 +79,7 @@ export default function App() {
           <ScheduleScreen
             currentClass={currentClass}
             onOpenSettings={() => setActiveTab('settings')}
+            onOpenAttendance={() => setActiveTab('attendance')}
           />
         );
       case 'attendance':
@@ -92,6 +94,7 @@ export default function App() {
           <MeetingScreen
             currentClass={currentClass}
             onOpenSettings={() => setActiveTab('settings')}
+            onOpenAttendance={() => setActiveTab('attendance')}
           />
         );
       case 'settings':
@@ -99,10 +102,17 @@ export default function App() {
           <SettingsScreen
             currentClass={currentClass}
             onClassChange={cls => setCurrentClass(cls)}
+            onOpenAttendance={() => setActiveTab('attendance')}
           />
         );
       default:
-        return <ChatScreen currentClass={currentClass} />;
+        return (
+          <ChatScreen
+            currentClass={currentClass}
+            onOpenSettings={() => setActiveTab('settings')}
+            onOpenAttendance={() => setActiveTab('attendance')}
+          />
+        );
     }
   };
 

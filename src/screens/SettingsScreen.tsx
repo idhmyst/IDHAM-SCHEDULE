@@ -26,6 +26,7 @@ import { CloudSyncService, UserProfile } from '../services/cloudSync';
 interface SettingsScreenProps {
   currentClass: string;
   onClassChange: (newClass: string) => void;
+  onOpenAttendance?: () => void;
 }
 
 const NOTIFICATION_FILTER_OPTIONS = [
@@ -42,6 +43,7 @@ const NOTIFICATION_FILTER_OPTIONS = [
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   currentClass,
   onClassChange,
+  onOpenAttendance,
 }) => {
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [overrides, setOverrides] = useState<ScheduleOverride[]>([]);
@@ -166,6 +168,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         title="PENGATURAN"
         subtitle="Konfigurasi Aplikasi"
         currentClass={currentClass}
+        onAttendancePress={onOpenAttendance}
       />
 
       <ScrollView style={styles.scrollArea}>
