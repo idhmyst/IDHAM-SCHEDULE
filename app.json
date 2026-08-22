@@ -33,8 +33,20 @@
     "primaryColor": "#D90000",
     "plugins": [
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-updates",
+        {
+          "username": "idhambaihaqi"
+        }
+      ]
     ],
+    "updates": {
+      "url": "https://u.expo.dev/7d64c4bc-deaa-4e19-a336-1127c686df40"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "extra": {
       "eas": {
         "projectId": "7d64c4bc-deaa-4e19-a336-1127c686df40"

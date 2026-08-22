@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -28,15 +28,36 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   onClose,
   onSave,
 }) => {
-  const [title, setTitle] = useState(initialData?.title || '');
-  const [subject, setSubject] = useState(initialData?.subject || 'Matematika (MTK-4)');
-  const [deadlineDate, setDeadlineDate] = useState(
-    initialData?.deadlineDate || new Date().toISOString().split('T')[0]
-  );
-  const [deadlineTime, setDeadlineTime] = useState(initialData?.deadlineTime || '23:59');
-  const [description, setDescription] = useState(initialData?.description || '');
-  const [fileName, setFileName] = useState(initialData?.attachedFileName || '');
-  const [fileUri, setFileUri] = useState(initialData?.attachedFileUri || '');
+  const [title, setTitle] = useState('');
+  const [subject, setSubject] = useState('Matematika (MTK-4)');
+  const [deadlineDate, setDeadlineDate] = useState(new Date().toISOString().split('T')[0]);
+  const [deadlineTime, setDeadlineTime] = useState('23:59');
+  const [description, setDescription] = useState('');
+  const [fileName, setFileName] = useState('');
+  const [fileUri, setFileUri] = useState('');
+
+  // Sync and retain old data whenever modal opens or initialData changes
+  useEffect(() => {
+    if (visible) {
+      if (initialData) {
+        setTitle(initialData.title || '');
+        setSubject(initialData.subject || 'Matematika (MTK-4)');
+        setDeadlineDate(initialData.deadlineDate || new Date().toISOString().split('T')[0]);
+        setDeadlineTime(initialData.deadlineTime || '23:59');
+        setDescription(initialData.description || '');
+        setFileName(initialData.attachedFileName || '');
+        setFileUri(initialData.attachedFileUri || '');
+      } else {
+        setTitle('');
+        setSubject('Matematika (MTK-4)');
+        setDeadlineDate(new Date().toISOString().split('T')[0]);
+        setDeadlineTime('23:59');
+        setDescription('');
+        setFileName('');
+        setFileUri('');
+      }
+    }
+  }, [visible, initialData]);
 
   const handlePickDocument = async () => {
     try {
@@ -71,8 +92,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       description: description.trim() || undefined,
       attachedFileName: fileName || undefined,
       attachedFileUri: fileUri || undefined,
-      isCompleted: false,
-      createdAt: new Date().toISOString(),
+      isCompleted: initialData?.isCompleted || false,
+      createdAt: initialData?.createdAt || new Date().toISOString(),
     };
 
     onSave(newTask);
@@ -87,7 +108,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       >
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>📝 Tambah / Edit Tugas Sekolah</Text>
+            <Text style={styles.headerTitle}>
+              {initialData?.id ? '✏️ Edit Tugas Sekolah' : '📝 Tambah Tugas Sekolah'}
+            </Text>
             <TouchableOpacity onPress={onClose}>
               <Text style={styles.closeText}>✕</Text>
             </TouchableOpacity>
@@ -179,7 +202,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-              <Text style={styles.saveBtnText}>Simpan Tugas</Text>
+              <Text style={styles.saveBtnText}>
+                {initialData?.id ? 'Perbarui Tugas' : 'Simpan Tugas'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

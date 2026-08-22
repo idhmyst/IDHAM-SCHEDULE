@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import { Audio } from 'expo-av';
 import { DayName, DaySchedule, MeetingAgenda, ScheduleItem, TaskAssignment } from '../types';
 import { ScheduleService } from './scheduleService';
 import { StorageService } from './storage';
@@ -41,10 +42,12 @@ export const NotificationService = {
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('schedule-reminders', {
         name: 'Pengingat Jadwal & Mapel',
-        importance: Notifications.AndroidImportance.HIGH,
-        vibrationPattern: [0, 250, 250, 250],
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 500, 250, 500],
         lightColor: '#D90000',
         sound: 'default',
+        enableVibrate: true,
+        enableLights: true,
       });
 
       await Notifications.setNotificationChannelAsync('task-reminders', {
@@ -53,6 +56,8 @@ export const NotificationService = {
         vibrationPattern: [0, 500, 250, 500],
         lightColor: '#D90000',
         sound: 'default',
+        enableVibrate: true,
+        enableLights: true,
       });
     }
 
@@ -107,7 +112,8 @@ export const NotificationService = {
             content: {
               title: `🔔 Mapel Berikutnya: ${item.subjectCode} (${item.subjectName})`,
               body: `Mulai ${reminderText} di Ruang ${item.room}. Jangan sampai terlambat!`,
-              sound: true,
+              sound: 'default',
+              vibrate: [0, 500, 250, 500],
               data: { type: 'schedule', itemId: item.id },
             },
             trigger: {
@@ -149,7 +155,8 @@ export const NotificationService = {
             content: {
               title: `📌 Agenda Meeting: ${meeting.title}`,
               body: `Mulai ${reminderText} di ${meeting.location}.`,
-              sound: true,
+              sound: 'default',
+              vibrate: [0, 500, 250, 500],
               data: { type: 'meeting', meetingId: meeting.id },
             },
             trigger: {
@@ -191,7 +198,8 @@ export const NotificationService = {
             content: {
               title: `⚠️ Deadline Tugas: ${task.title} [${task.subject}]`,
               body: `Batas pengumpulan ${reminderText}. ${fileStatus}`,
-              sound: true,
+              sound: 'default',
+              vibrate: [0, 500, 250, 500],
               data: { type: 'task', taskId: task.id },
             },
             trigger: {
@@ -208,7 +216,7 @@ export const NotificationService = {
 
   async sendInstantTestNotification(): Promise<void> {
     if (Platform.OS === 'web') {
-      alert('🔔 [TEST NOTIFIKASI] Pengingat jadwal dan deadline tugas aktif!');
+      alert('🔔 [TEST NOTIFIKASI] Pengingat jadwal dan deadline tugas aktif dengan bunyi alarm!');
       return;
     }
 
@@ -216,8 +224,9 @@ export const NotificationService = {
     await Notifications.scheduleNotificationAsync({
       content: {
         title: '🔔 Test Pengingat IDHAM SCHEDULE',
-        body: 'Notifikasi berhasil diuji! Anda akan diingatkan sebelum waktu pelajaran, meeting, dan deadline tugas.',
-        sound: true,
+        body: 'Notifikasi bersuara & getar berhasil diuji! Anda akan diingatkan tepat waktu.',
+        sound: 'default',
+        vibrate: [0, 500, 250, 500],
       },
       trigger: null,
     });

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -26,11 +26,30 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
   onClose,
   onSave,
 }) => {
-  const [title, setTitle] = useState(initialData?.title || '');
-  const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0]);
-  const [time, setTime] = useState(initialData?.time || '14:00');
-  const [location, setLocation] = useState(initialData?.location || 'Ruang Guru / Kelas');
-  const [notes, setNotes] = useState(initialData?.notes || '');
+  const [title, setTitle] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [time, setTime] = useState('14:00');
+  const [location, setLocation] = useState('Ruang Guru / Kelas');
+  const [notes, setNotes] = useState('');
+
+  // Sync and retain old data whenever modal opens
+  useEffect(() => {
+    if (visible) {
+      if (initialData) {
+        setTitle(initialData.title || '');
+        setDate(initialData.date || new Date().toISOString().split('T')[0]);
+        setTime(initialData.time || '14:00');
+        setLocation(initialData.location || 'Ruang Guru / Kelas');
+        setNotes(initialData.notes || '');
+      } else {
+        setTitle('');
+        setDate(new Date().toISOString().split('T')[0]);
+        setTime('14:00');
+        setLocation('Ruang Guru / Kelas');
+        setNotes('');
+      }
+    }
+  }, [visible, initialData]);
 
   const handleSave = () => {
     if (!title.trim()) return;
@@ -41,9 +60,9 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
       date: date.trim(),
       time: time.trim(),
       location: location.trim() || 'Sekolah',
-      notes: notes.trim(),
-      isCompleted: false,
-      createdAt: new Date().toISOString(),
+      notes: notes.trim() || undefined,
+      isCompleted: initialData?.isCompleted || false,
+      createdAt: initialData?.createdAt || new Date().toISOString(),
     };
 
     onSave(newMeeting);
@@ -58,7 +77,9 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
       >
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>📌 Tambah / Edit Janji Meeting</Text>
+            <Text style={styles.headerTitle}>
+              {initialData?.id ? '✏️ Edit Janji Meeting' : '📌 Tambah Janji Meeting'}
+            </Text>
             <TouchableOpacity onPress={onClose}>
               <Text style={styles.closeText}>✕</Text>
             </TouchableOpacity>
@@ -125,7 +146,9 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-              <Text style={styles.saveBtnText}>Simpan Agenda</Text>
+              <Text style={styles.saveBtnText}>
+                {initialData?.id ? 'Perbarui Agenda' : 'Simpan Agenda'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

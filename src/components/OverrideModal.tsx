@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -21,6 +21,7 @@ interface OverrideModalProps {
     period?: number;
     currentSubject?: string;
     currentRoom?: string;
+    note?: string;
   };
   onClose: () => void;
   onSave: (override: ScheduleOverride) => void;
@@ -33,12 +34,32 @@ export const OverrideModal: React.FC<OverrideModalProps> = ({
   onClose,
   onSave,
 }) => {
-  const [day, setDay] = useState<DayName>(initialData?.day || 'senin');
-  const [period, setPeriod] = useState(initialData?.period ? initialData.period.toString() : '1');
+  const [day, setDay] = useState<DayName>('senin');
+  const [period, setPeriod] = useState('1');
   const [subjectName, setSubjectName] = useState('');
   const [subjectCode, setSubjectCode] = useState('');
-  const [room, setRoom] = useState(initialData?.currentRoom || '');
+  const [room, setRoom] = useState('');
   const [note, setNote] = useState('');
+
+  // Retain & pre-fill existing schedule data
+  useEffect(() => {
+    if (visible) {
+      if (initialData) {
+        setDay(initialData.day || 'senin');
+        setPeriod(initialData.period ? initialData.period.toString() : '1');
+        setSubjectName(initialData.currentSubject || '');
+        setRoom(initialData.currentRoom || '');
+        setNote(initialData.note || '');
+      } else {
+        setDay('senin');
+        setPeriod('1');
+        setSubjectName('');
+        setSubjectCode('');
+        setRoom('');
+        setNote('');
+      }
+    }
+  }, [visible, initialData]);
 
   const daysList: { key: DayName; label: string }[] = [
     { key: 'senin', label: 'Senin' },
@@ -73,7 +94,7 @@ export const OverrideModal: React.FC<OverrideModalProps> = ({
       >
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>✏️ Ubah Jadwal / Ruangan Kelas</Text>
+            <Text style={styles.headerTitle}>✏️ Ubah / Override Jadwal Kelas</Text>
             <TouchableOpacity onPress={onClose}>
               <Text style={styles.closeText}>✕</Text>
             </TouchableOpacity>
@@ -105,7 +126,7 @@ export const OverrideModal: React.FC<OverrideModalProps> = ({
               onChangeText={setPeriod}
             />
 
-            <Text style={styles.label}>Nama Mapel Baru (Opsional)</Text>
+            <Text style={styles.label}>Nama Mapel</Text>
             <TextInput
               style={styles.input}
               placeholder="Contoh: Bimbingan Konseling / Free / Praktik"
@@ -123,7 +144,7 @@ export const OverrideModal: React.FC<OverrideModalProps> = ({
               onChangeText={setSubjectCode}
             />
 
-            <Text style={styles.label}>Ruangan Baru</Text>
+            <Text style={styles.label}>Ruangan Kelas</Text>
             <TextInput
               style={styles.input}
               placeholder="Contoh: Lab RPL 2 / RPS UTR / B.3.2"
