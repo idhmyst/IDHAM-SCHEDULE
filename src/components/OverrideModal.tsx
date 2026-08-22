@@ -13,6 +13,7 @@ import {
 import { COLORS } from '../constants/theme';
 import { DayName, ScheduleOverride } from '../types';
 import { ScheduleService } from '../services/scheduleService';
+import { triggerAlarmSoundAndVibration } from '../services/notificationService';
 
 interface OverrideModalProps {
   visible: boolean;
@@ -49,13 +50,13 @@ const QUICK_PRESETS = [
 ];
 
 const REMINDER_OPTIONS = [
-  { label: '5m', value: 5, full: '5 Menit Sebelum' },
-  { label: '10m', value: 10, full: '10 Menit Sebelum' },
-  { label: '15m', value: 15, full: '15 Menit Sebelum' },
-  { label: '30m', value: 30, full: '30 Menit Sebelum' },
+  { label: '5 Min', value: 5, full: '5 Menit Sebelum' },
+  { label: '10 Min', value: 10, full: '10 Menit Sebelum' },
+  { label: '15 Min', value: 15, full: '15 Menit Sebelum' },
+  { label: '30 Min', value: 30, full: '30 Menit Sebelum' },
   { label: '1 Jam', value: 60, full: '1 Jam Sebelum' },
-  { label: 'H-1', value: 1440, full: '1 Hari Sebelum' },
-  { label: 'H-7', value: 10080, full: '1 Minggu Sebelum' },
+  { label: '1 Hari (H-1)', value: 1440, full: '1 Hari Sebelum' },
+  { label: '1 Minggu (H-7)', value: 10080, full: '1 Minggu Sebelum' },
 ];
 
 export const OverrideModal: React.FC<OverrideModalProps> = ({
@@ -175,7 +176,7 @@ export const OverrideModal: React.FC<OverrideModalProps> = ({
               <Text style={styles.headerIcon}>✏️</Text>
               <View>
                 <Text style={styles.headerTitle}>Edit Jadwal Pelajaran</Text>
-                <Text style={styles.headerSub}>Kelas {className} • Kalender & Pengingat</Text>
+                <Text style={styles.headerSub}>Kelas {className} • Kalender & Pengingat Alarm</Text>
               </View>
             </View>
             <TouchableOpacity onPress={onClose}>
@@ -185,7 +186,7 @@ export const OverrideModal: React.FC<OverrideModalProps> = ({
 
           <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
             {/* 1. FILTERING KALENDER & TANGGAL */}
-            <Text style={styles.sectionLabel}>📅 Kalender & Hari Pelajaran:</Text>
+            <Text style={styles.sectionLabel}>📅 Filter Kalender & Hari Pelajaran:</Text>
             <View style={styles.quickDateRow}>
               <TouchableOpacity
                 style={styles.quickDateBtn}
@@ -209,7 +210,7 @@ export const OverrideModal: React.FC<OverrideModalProps> = ({
 
             <TextInput
               style={styles.input}
-              placeholder="YYYY-MM-DD (cth: 2026-08-24)"
+              placeholder="Format: YYYY-MM-DD (cth: 2026-08-24)"
               placeholderTextColor={COLORS.textLight}
               value={dateStr}
               onChangeText={handleDateChange}
@@ -297,9 +298,23 @@ export const OverrideModal: React.FC<OverrideModalProps> = ({
             />
 
             {/* 2. PENGINGAT ALARM MULTI-SELECT (BERSUARA & GETAR) */}
-            <Text style={styles.sectionLabel}>
-              🔔 Pengingat Alarm (Suara & Getar) — Bisa Centang &gt;1:
+            <View style={styles.reminderHeaderRow}>
+              <Text style={styles.sectionLabel}>
+                🔔 Pengingat Alarm (Suara Ringtone & Getar):
+              </Text>
+              <TouchableOpacity
+                style={styles.testSoundBtn}
+                onPress={() => triggerAlarmSoundAndVibration()}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.testSoundText}>🔊 Tes Bunyi</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.reminderSub}>
+              Pilih waktu alarm (bisa centang lebih dari 1):
             </Text>
+
             <View style={styles.reminderGrid}>
               {REMINDER_OPTIONS.map(opt => {
                 const isSelected = notifyOffsets.includes(opt.value);
@@ -392,7 +407,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: COLORS.textDark,
     marginTop: 8,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   quickDateRow: {
     flexDirection: 'row',
@@ -404,7 +419,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primaryLight,
     borderWidth: 1,
     borderColor: COLORS.primaryBadge,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: 8,
     alignItems: 'center',
   },
@@ -505,11 +520,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
+  reminderHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  testSoundBtn: {
+    backgroundColor: '#059669',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  testSoundText: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  reminderSub: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+    marginBottom: 6,
+  },
   reminderGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginTop: 2,
     marginBottom: 8,
   },
   reminderChip: {

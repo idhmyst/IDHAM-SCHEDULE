@@ -14,6 +14,7 @@ import {
 import * as DocumentPicker from 'expo-document-picker';
 import { COLORS } from '../constants/theme';
 import { TaskAssignment } from '../types';
+import { triggerAlarmSoundAndVibration } from '../services/notificationService';
 
 interface TaskModalProps {
   visible: boolean;
@@ -254,7 +255,16 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             </ScrollView>
 
             {/* Pengaturan Pengingat (Multi-Select) */}
-            <Text style={styles.label}>🔔 Pengingat Alarm Sebelum Deadline (Bisa pilih lebih dari 1):</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, marginBottom: 4 }}>
+              <Text style={styles.label}>🔔 Pengingat Alarm (Suara & Getar):</Text>
+              <TouchableOpacity
+                style={{ backgroundColor: '#059669', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}
+                onPress={() => triggerAlarmSoundAndVibration()}
+              >
+                <Text style={{ color: COLORS.white, fontSize: 10, fontWeight: 'bold' }}>🔊 Tes Bunyi</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={{ fontSize: 10, color: COLORS.textMuted, marginBottom: 6 }}>Bisa pilih & centang lebih dari 1:</Text>
             <View style={styles.reminderOptionsGrid}>
               {REMINDER_OPTIONS.map(opt => {
                 const isSelected = selectedOffsets.includes(opt.minutes);

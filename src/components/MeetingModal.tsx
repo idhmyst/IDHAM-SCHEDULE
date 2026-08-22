@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { MeetingAgenda } from '../types';
+import { triggerAlarmSoundAndVibration } from '../services/notificationService';
 
 interface MeetingModalProps {
   visible: boolean;
@@ -211,7 +212,16 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
             </ScrollView>
 
             {/* Pengaturan Pengingat (Multi-Select) */}
-            <Text style={styles.label}>🔔 Pengingat Alarm Sebelum Meeting (Bisa pilih lebih dari 1):</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, marginBottom: 4 }}>
+              <Text style={styles.label}>🔔 Pengingat Alarm (Suara & Getar):</Text>
+              <TouchableOpacity
+                style={{ backgroundColor: '#059669', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}
+                onPress={() => triggerAlarmSoundAndVibration()}
+              >
+                <Text style={{ color: COLORS.white, fontSize: 10, fontWeight: 'bold' }}>🔊 Tes Bunyi</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={{ fontSize: 10, color: COLORS.textMuted, marginBottom: 6 }}>Bisa pilih & centang lebih dari 1:</Text>
             <View style={styles.reminderOptionsGrid}>
               {REMINDER_OPTIONS.map(opt => {
                 const isSelected = selectedOffsets.includes(opt.minutes);

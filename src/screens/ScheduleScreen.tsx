@@ -131,6 +131,49 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
         onAttendancePress={onOpenAttendance}
       />
 
+      {/* Quick Date Presets Strip */}
+      <View style={styles.quickPresetStrip}>
+        <TouchableOpacity
+          style={[styles.quickPresetBtn, isSameDay(selectedDate, new Date()) && styles.activeQuickPresetBtn]}
+          onPress={() => {
+            const today = new Date();
+            setSelectedDate(today);
+            const dayKey = ScheduleService.getDayKeyFromDate(today);
+            if (['senin', 'selasa', 'rabu', 'kamis', 'jumat'].includes(dayKey)) setSelectedDay(dayKey);
+          }}
+        >
+          <Text style={[styles.quickPresetText, isSameDay(selectedDate, new Date()) && styles.activeQuickPresetText]}>
+            Hari Ini
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.quickPresetBtn}
+          onPress={() => {
+            const tom = new Date();
+            tom.setDate(tom.getDate() + 1);
+            setSelectedDate(tom);
+            const dayKey = ScheduleService.getDayKeyFromDate(tom);
+            if (['senin', 'selasa', 'rabu', 'kamis', 'jumat'].includes(dayKey)) setSelectedDay(dayKey);
+          }}
+        >
+          <Text style={styles.quickPresetText}>Besok</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.quickPresetBtn}
+          onPress={() => {
+            const lusa = new Date();
+            lusa.setDate(lusa.getDate() + 2);
+            setSelectedDate(lusa);
+            const dayKey = ScheduleService.getDayKeyFromDate(lusa);
+            if (['senin', 'selasa', 'rabu', 'kamis', 'jumat'].includes(dayKey)) setSelectedDay(dayKey);
+          }}
+        >
+          <Text style={styles.quickPresetText}>Lusa</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Calendar Header Month */}
       <View style={styles.calendarHeader}>
         <Text style={styles.monthTitle}>📅 {getMonthName(selectedDate)}</Text>
@@ -309,9 +352,37 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  quickPresetStrip: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    gap: 8,
+  },
+  quickPresetBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  activeQuickPresetBtn: {
+    backgroundColor: COLORS.primaryLight,
+    borderColor: COLORS.primary,
+  },
+  quickPresetText: {
+    fontSize: 11,
+    color: COLORS.textDark,
+    fontWeight: '600',
+  },
+  activeQuickPresetText: {
+    color: COLORS.primary,
+    fontWeight: 'bold',
+  },
   calendarHeader: {
     paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingTop: 8,
     paddingBottom: 4,
     backgroundColor: COLORS.white,
   },
