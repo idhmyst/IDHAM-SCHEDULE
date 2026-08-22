@@ -1,16 +1,23 @@
 import * as Notifications from 'expo-notifications';
 import { Platform, Vibration } from 'react-native';
 import { Audio } from 'expo-av';
-import { DayName, DaySchedule, MeetingAgenda, ScheduleItem, TaskAssignment } from '../types';
+import { DayName, DaySchedule, MeetingAgenda, ScheduleItem, ScheduleOverride, TaskAssignment } from '../types';
 import { ScheduleService } from './scheduleService';
 import { StorageService } from './storage';
 
-// In-app audio chime player for notif ringtone.mp3
+// In-app custom audio chime player for notif_ringtone.mp3
 export const playNotificationRingtone = async () => {
   if (Platform.OS === 'web') return;
   try {
+    await Audio.setAudioModeAsync({
+      playsInSilentModeIOS: true,
+      shouldDuckAndroid: true,
+      staysActiveInBackground: true,
+    });
+
     const { sound } = await Audio.Sound.createAsync(
-      require('../../assets/notif_ringtone.mp3')
+      require('../../assets/notif_ringtone.mp3'),
+      { shouldPlay: true, volume: 1.0 }
     );
     await sound.playAsync();
   } catch (err) {
@@ -20,10 +27,10 @@ export const playNotificationRingtone = async () => {
 
 Notifications.setNotificationHandler({
   handleNotification: async () => {
-    // Explicit vibration and custom ringtone playback on arrival
+    // Explicit strong vibration and custom ringtone playback on arrival
     if (Platform.OS !== 'web') {
       try {
-        Vibration.vibrate([0, 800, 300, 800, 300, 1000]);
+        Vibration.vibrate([0, 600, 250, 600, 250, 900]);
         playNotificationRingtone();
       } catch (e) {}
     }
@@ -76,7 +83,7 @@ export const NotificationService = {
       await Notifications.setNotificationChannelAsync('schedule-reminders', {
         name: 'Pengingat Jadwal & Mapel',
         importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 800, 300, 800, 300, 1000],
+        vibrationPattern: [0, 600, 250, 600, 250, 900],
         lightColor: '#D90000',
         sound: 'notification.mp3',
         enableVibrate: true,
@@ -89,7 +96,7 @@ export const NotificationService = {
       await Notifications.setNotificationChannelAsync('task-reminders', {
         name: 'Pengingat Deadline Tugas & File',
         importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 800, 300, 800, 300, 1000],
+        vibrationPattern: [0, 600, 250, 600, 250, 900],
         lightColor: '#D90000',
         sound: 'notification.mp3',
         enableVibrate: true,
@@ -154,7 +161,7 @@ export const NotificationService = {
                 title: `🔔 Mapel Berikutnya: ${item.subjectCode} (${item.subjectName})`,
                 body: `Mulai ${reminderText} (${item.startTime} WIB) di Ruang ${item.room}. Jangan terlambat!`,
                 sound: 'notification.mp3',
-                vibrate: [0, 800, 300, 800, 300, 1000],
+                vibrate: [0, 600, 250, 600, 250, 900],
                 data: { type: 'schedule', itemId: item.id, offset: minutesBefore },
               },
               trigger: {
@@ -198,7 +205,7 @@ export const NotificationService = {
                 title: `📌 Agenda Meeting: ${meeting.title}`,
                 body: `Mulai ${reminderText} (${meeting.time} WIB) di ${meeting.location}.`,
                 sound: 'notification.mp3',
-                vibrate: [0, 800, 300, 800, 300, 1000],
+                vibrate: [0, 600, 250, 600, 250, 900],
                 data: { type: 'meeting', meetingId: meeting.id, offset: minutesBefore },
               },
               trigger: {
@@ -244,7 +251,7 @@ export const NotificationService = {
                 title: `⚠️ Deadline Tugas: ${task.title} [${task.subject}]`,
                 body: `Batas pengumpulan ${reminderText} (${task.deadlineTime} WIB). ${fileStatus}`,
                 sound: 'notification.mp3',
-                vibrate: [0, 800, 300, 800, 300, 1000],
+                vibrate: [0, 600, 250, 600, 250, 900],
                 data: { type: 'task', taskId: task.id, offset: minutesBefore },
               },
               trigger: {
@@ -267,7 +274,7 @@ export const NotificationService = {
     }
 
     try {
-      Vibration.vibrate([0, 800, 300, 800, 300, 1000]);
+      Vibration.vibrate([0, 600, 250, 600, 250, 900]);
       await playNotificationRingtone();
     } catch (e) {}
 
@@ -275,9 +282,9 @@ export const NotificationService = {
     await Notifications.scheduleNotificationAsync({
       content: {
         title: '🔔 Test Pengingat IDHAM SCHEDULE',
-        body: 'Notifikasi bersuara & getar berhasil diuji! Anda akan diingatkan tepat waktu.',
+        body: 'Notifikasi bersuara notif_ringtone.mp3 & getar fisik aktif!',
         sound: 'notification.mp3',
-        vibrate: [0, 800, 300, 800, 300, 1000],
+        vibrate: [0, 600, 250, 600, 250, 900],
       },
       trigger: null,
     });

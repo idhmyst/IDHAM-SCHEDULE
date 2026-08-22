@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { DayName, ScheduleOverride } from '../types';
+import { ScheduleService } from '../services/scheduleService';
 
 interface OverrideModalProps {
   visible: boolean;
@@ -22,6 +23,7 @@ interface OverrideModalProps {
     currentSubject?: string;
     currentRoom?: string;
     note?: string;
+    notifyOffsets?: number[];
   };
   onClose: () => void;
   onSave: (override: ScheduleOverride) => void;
@@ -46,6 +48,16 @@ const QUICK_PRESETS = [
   { name: 'Kewirausahaan (PKK)', code: 'PKK-2', room: 'RPS UTR' },
 ];
 
+const REMINDER_OPTIONS = [
+  { label: '5m', value: 5, full: '5 Menit Sebelum' },
+  { label: '10m', value: 10, full: '10 Menit Sebelum' },
+  { label: '15m', value: 15, full: '15 Menit Sebelum' },
+  { label: '30m', value: 30, full: '30 Menit Sebelum' },
+  { label: '1 Jam', value: 60, full: '1 Jam Sebelum' },
+  { label: 'H-1', value: 1440, full: '1 Hari Sebelum' },
+  { label: 'H-7', value: 10080, full: '1 Minggu Sebelum' },
+];
+
 export const OverrideModal: React.FC<OverrideModalProps> = ({
   visible,
   className,
@@ -54,13 +66,15 @@ export const OverrideModal: React.FC<OverrideModalProps> = ({
   onSave,
 }) => {
   const [day, setDay] = useState<DayName>('senin');
+  const [dateStr, setDateStr] = useState(new Date().toISOString().split('T')[0]);
   const [period, setPeriod] = useState(1);
   const [subjectName, setSubjectName] = useState('');
   const [subjectCode, setSubjectCode] = useState('');
   const [room, setRoom] = useState('');
   const [note, setNote] = useState('');
+  const [notifyOffsets, setNotifyOffsets] = useState<number[]>([15, 30]);
 
-  // Retain & pre-fill existing schedule data
+  // Retain & pre-fill existing schedule data and reminder options
   useEffect(() => {
     if (visible) {
       if (initialData) {
@@ -69,16 +83,60 @@ export const OverrideModal: React.FC<OverrideModalProps> = ({
         setSubjectName(initialData.currentSubject || '');
         setRoom(initialData.currentRoom || '');
         setNote(initialData.note || '');
+        if (initialData.notifyOffsets && initialData.notifyOffsets.length > 0) {
+          setNotifyOffsets(initialData.notifyOffsets);
+        } else {
+          setNotifyOffsets([15, 30]);
+        }
       } else {
-        setDay('senin');
+        const todayKey = ScheduleService.getDayKeyFromDate(new Date());
+        setDay(['senin', 'selasa', 'rabu', 'kamis', 'jumat'].includes(todayKey) ? todayKey : 'senin');
         setPeriod(1);
         setSubjectName('');
         setSubjectCode('');
         setRoom('');
         setNote('');
+        setNotifyOffsets([15, 30]);
       }
+      setDateStr(new Date().toISOString().split('T')[0]);
     }
   }, [visible, initialData]);
+
+  // Date Presets (Hari Ini, Besok, Lusa)
+  const handleQuickDate = (offsetDays: number) => {
+    const target = new Date();
+    target.setDate(target.getDate() + offsetDays);
+    const yyyy = target.getFullYear();
+    const mm = String(target.getMonth() + 1).padStart(2, '0');
+    const dd = String(target.getDate()).padStart(2, '0');
+    setDateStr(`${yyyy}-${mm}-${dd}`);
+
+    const dayKey = ScheduleService.getDayKeyFromDate(target);
+    if (['senin', 'selasa', 'rabu', 'kamis', 'jumat'].includes(dayKey)) {
+      setDay(dayKey);
+    }
+  };
+
+  const handleDateChange = (text: string) => {
+    setDateStr(text);
+    if (text.length === 10) {
+      const parsedDate = new Date(text);
+      if (!isNaN(parsedDate.getTime())) {
+        const dayKey = ScheduleService.getDayKeyFromDate(parsedDate);
+        if (['senin', 'selasa', 'rabu', 'kamis', 'jumat'].includes(dayKey)) {
+          setDay(dayKey);
+        }
+      }
+    }
+  };
+
+  const handleToggleOffset = (val: number) => {
+    if (notifyOffsets.includes(val)) {
+      setNotifyOffsets(notifyOffsets.filter(v => v !== val));
+    } else {
+      setNotifyOffsets([...notifyOffsets, val].sort((a, b) => a - b));
+    }
+  };
 
   const handleApplyPreset = (preset: { name: string; code: string; room: string }) => {
     setSubjectName(preset.name);
@@ -97,6 +155,7 @@ export const OverrideModal: React.FC<OverrideModalProps> = ({
       newSubjectCode: subjectCode.trim() || undefined,
       newRoom: room.trim() || undefined,
       note: note.trim() || 'Perubahan Mandiri',
+      notifyOffsets: notifyOffsets.length > 0 ? notifyOffsets : [15],
       createdAt: new Date().toISOString(),
     };
 
@@ -112,117 +171,167 @@ export const OverrideModal: React.FC<OverrideModalProps> = ({
       >
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>✏️ Ubah / Override Jadwal Pelajaran</Text>
+            <View style={styles.headerTitleBox}>
+              <Text style={styles.headerIcon}>✏️</Text>
+              <View>
+                <Text style={styles.headerTitle}>Edit Jadwal Pelajaran</Text>
+                <Text style={styles.headerSub}>Kelas {className} • Kalender & Pengingat</Text>
+              </View>
+            </View>
             <TouchableOpacity onPress={onClose}>
-              <Text style={styles.closeText}>✕</Text>
+              <Text style={styles.closeBtn}>✕</Text>
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
-            {/* 1. Pilih Hari (Interactive Buttons) */}
-            <Text style={styles.label}>1. Pilih Hari</Text>
-            <View style={styles.chipsRow}>
+            {/* 1. FILTERING KALENDER & TANGGAL */}
+            <Text style={styles.sectionLabel}>📅 Kalender & Hari Pelajaran:</Text>
+            <View style={styles.quickDateRow}>
+              <TouchableOpacity
+                style={styles.quickDateBtn}
+                onPress={() => handleQuickDate(0)}
+              >
+                <Text style={styles.quickDateText}>Hari Ini</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.quickDateBtn}
+                onPress={() => handleQuickDate(1)}
+              >
+                <Text style={styles.quickDateText}>Besok</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.quickDateBtn}
+                onPress={() => handleQuickDate(2)}
+              >
+                <Text style={styles.quickDateText}>Lusa</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={styles.input}
+              placeholder="YYYY-MM-DD (cth: 2026-08-24)"
+              placeholderTextColor={COLORS.textLight}
+              value={dateStr}
+              onChangeText={handleDateChange}
+            />
+
+            {/* Pilihan Hari */}
+            <View style={styles.daysRow}>
               {DAYS_LIST.map(d => (
                 <TouchableOpacity
                   key={d.key}
-                  style={[styles.chipButton, day === d.key && styles.activeChipButton]}
+                  style={[styles.dayChip, day === d.key && styles.activeDayChip]}
                   onPress={() => setDay(d.key)}
-                  activeOpacity={0.7}
                 >
-                  <Text
-                    style={[styles.chipButtonText, day === d.key && styles.activeChipButtonText]}
-                  >
+                  <Text style={[styles.dayChipText, day === d.key && styles.activeDayChipText]}>
                     {d.label}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            {/* 2. Pilih Jam ke- (Interactive Buttons 1-11) */}
-            <Text style={styles.label}>2. Pilih Jam Pelajaran ke-</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.periodRow}>
+            {/* Pilihan Jam Ke */}
+            <Text style={styles.sectionLabel}>⏰ Jam Pelajaran Ke-:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.periodScroll}>
               {PERIOD_LIST.map(p => (
                 <TouchableOpacity
                   key={p}
                   style={[styles.periodChip, period === p && styles.activePeriodChip]}
                   onPress={() => setPeriod(p)}
-                  activeOpacity={0.7}
                 >
-                  <Text
-                    style={[styles.periodChipText, period === p && styles.activePeriodChipText]}
-                  >
-                    Jam {p}
+                  <Text style={[styles.periodChipText, period === p && styles.activePeriodChipText]}>
+                    Ke-{p}
                   </Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
-            {/* 3. Preset Cepat (Quick Tap) */}
-            <Text style={styles.label}>3. Opsi Cepat (Sekali Pencet)</Text>
-            <View style={styles.presetWrap}>
-              {QUICK_PRESETS.map((item, idx) => (
+            {/* Template Perubahan Cepat */}
+            <Text style={styles.sectionLabel}>⚡ Template Perubahan Cepat:</Text>
+            <View style={styles.presetGrid}>
+              {QUICK_PRESETS.map((preset, idx) => (
                 <TouchableOpacity
                   key={idx}
-                  style={styles.presetChip}
-                  onPress={() => handleApplyPreset(item)}
-                  activeOpacity={0.7}
+                  style={styles.presetItem}
+                  onPress={() => handleApplyPreset(preset)}
                 >
-                  <Text style={styles.presetChipText}>⚡ {item.name}</Text>
+                  <Text style={styles.presetName}>{preset.name}</Text>
+                  <Text style={styles.presetSub}>{preset.code} • {preset.room}</Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            {/* 4. Form Rincian Mapel & Ruangan */}
-            <Text style={styles.label}>4. Nama Mata Pelajaran</Text>
+            {/* Detail Mapel & Ruangan */}
+            <Text style={styles.sectionLabel}>📖 Detail Pengganti (Data Lama Tersimpan):</Text>
             <TextInput
               style={styles.input}
-              placeholder="Contoh: Bimbingan Konseling / Free Class / Praktik"
+              placeholder="Nama Mata Pelajaran Baru"
               placeholderTextColor={COLORS.textLight}
               value={subjectName}
               onChangeText={setSubjectName}
             />
 
             <View style={styles.row}>
-              <View style={styles.col}>
-                <Text style={styles.label}>Kode Mapel</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="BK-2 / FREE"
-                  placeholderTextColor={COLORS.textLight}
-                  value={subjectCode}
-                  onChangeText={setSubjectCode}
-                />
-              </View>
-
-              <View style={styles.col}>
-                <Text style={styles.label}>Ruangan Kelas</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Lab RPL 2 / B.3.2"
-                  placeholderTextColor={COLORS.textLight}
-                  value={room}
-                  onChangeText={setRoom}
-                />
-              </View>
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                placeholder="Kode Mapel (cth: BK, FREE)"
+                placeholderTextColor={COLORS.textLight}
+                value={subjectCode}
+                onChangeText={setSubjectCode}
+              />
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                placeholder="Ruangan Baru (cth: B.3.2)"
+                placeholderTextColor={COLORS.textLight}
+                value={room}
+                onChangeText={setRoom}
+              />
             </View>
 
-            <Text style={styles.label}>Alasan / Catatan Perubahan</Text>
             <TextInput
               style={styles.input}
-              placeholder="Contoh: Guru tugas luar / Pindah lab"
+              placeholder="Catatan (cth: Guru rapat, tugas modul 3)"
               placeholderTextColor={COLORS.textLight}
               value={note}
               onChangeText={setNote}
             />
+
+            {/* 2. PENGINGAT ALARM MULTI-SELECT (BERSUARA & GETAR) */}
+            <Text style={styles.sectionLabel}>
+              🔔 Pengingat Alarm (Suara & Getar) — Bisa Centang &gt;1:
+            </Text>
+            <View style={styles.reminderGrid}>
+              {REMINDER_OPTIONS.map(opt => {
+                const isSelected = notifyOffsets.includes(opt.value);
+                return (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[styles.reminderChip, isSelected && styles.activeReminderChip]}
+                    onPress={() => handleToggleOffset(opt.value)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.reminderCheck, isSelected && styles.activeReminderCheck]}>
+                      {isSelected && <Text style={styles.checkIcon}>✓</Text>}
+                    </View>
+                    <Text style={[styles.reminderText, isSelected && styles.activeReminderText]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </ScrollView>
 
           <View style={styles.footer}>
             <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-              <Text style={styles.cancelBtnText}>Batal</Text>
+              <Text style={styles.cancelText}>Batal</Text>
             </TouchableOpacity>
-
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-              <Text style={styles.saveBtnText}>Terapkan Jadwal</Text>
+            <TouchableOpacity
+              style={[styles.saveBtn, (!subjectName.trim() && !subjectCode.trim()) && styles.disabledSaveBtn]}
+              onPress={handleSave}
+              disabled={!subjectName.trim() && !subjectCode.trim()}
+            >
+              <Text style={styles.saveText}>✓ Simpan Perubahan Jadwal</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -241,83 +350,115 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '90%',
-    padding: 20,
+    maxHeight: '92%',
+    padding: 16,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
-    paddingBottom: 12,
+    marginBottom: 8,
+    paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
   },
+  headerTitleBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerIcon: {
+    fontSize: 22,
+  },
   headerTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
     color: COLORS.textDark,
   },
-  closeText: {
+  headerSub: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+  },
+  closeBtn: {
     fontSize: 20,
     color: COLORS.textMuted,
     fontWeight: 'bold',
   },
   body: {
-    marginBottom: 16,
+    marginBottom: 10,
   },
-  label: {
-    fontSize: 12,
-    fontWeight: '700',
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: 'bold',
     color: COLORS.textDark,
+    marginTop: 8,
     marginBottom: 6,
-    marginTop: 10,
   },
-  chipsRow: {
+  quickDateRow: {
     flexDirection: 'row',
     gap: 6,
+    marginBottom: 6,
   },
-  chipButton: {
+  quickDateBtn: {
     flex: 1,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.primaryLight,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.primaryBadge,
+    paddingVertical: 6,
+    borderRadius: 8,
     alignItems: 'center',
   },
-  activeChipButton: {
+  quickDateText: {
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: 'bold',
+  },
+  daysRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginVertical: 6,
+  },
+  dayChip: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: COLORS.background,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  activeDayChip: {
     backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
-  chipButtonText: {
-    fontSize: 12,
-    color: COLORS.textBody,
+  dayChipText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
     fontWeight: '600',
   },
-  activeChipButtonText: {
+  activeDayChipText: {
     color: COLORS.white,
     fontWeight: 'bold',
   },
-  periodRow: {
+  periodScroll: {
     flexDirection: 'row',
-    gap: 6,
-    paddingVertical: 4,
+    marginBottom: 6,
   },
   periodChip: {
     paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
     backgroundColor: COLORS.background,
     borderWidth: 1,
     borderColor: COLORS.border,
+    marginRight: 6,
   },
   activePeriodChip: {
     backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
   periodChipText: {
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.textDark,
     fontWeight: '600',
   },
@@ -325,66 +466,126 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: 'bold',
   },
-  presetWrap: {
+  presetGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
+    marginBottom: 6,
   },
-  presetChip: {
+  presetItem: {
+    width: '48%',
     backgroundColor: COLORS.primaryLight,
+    padding: 8,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: COLORS.primaryBadge,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
   },
-  presetChipText: {
+  presetName: {
     fontSize: 11,
+    fontWeight: 'bold',
     color: COLORS.primary,
-    fontWeight: '700',
+  },
+  presetSub: {
+    fontSize: 9,
+    color: COLORS.textMuted,
+    marginTop: 2,
   },
   input: {
     backgroundColor: COLORS.background,
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    fontSize: 13,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 12,
     color: COLORS.textDark,
+    marginBottom: 6,
   },
   row: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
-  col: {
-    flex: 1,
+  reminderGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  reminderChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 6,
+  },
+  activeReminderChip: {
+    backgroundColor: COLORS.primaryLight,
+    borderColor: COLORS.primary,
+  },
+  reminderCheck: {
+    width: 14,
+    height: 14,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: COLORS.textLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeReminderCheck: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  checkIcon: {
+    color: COLORS.white,
+    fontSize: 9,
+    fontWeight: 'bold',
+  },
+  reminderText: {
+    fontSize: 11,
+    color: COLORS.textDark,
+    fontWeight: '600',
+  },
+  activeReminderText: {
+    color: COLORS.primary,
+    fontWeight: 'bold',
   },
   footer: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
+    paddingTop: 4,
   },
   cancelBtn: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
+    backgroundColor: COLORS.background,
+    paddingVertical: 11,
+    borderRadius: 10,
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.border,
-    alignItems: 'center',
   },
-  cancelBtnText: {
+  cancelText: {
     color: COLORS.textMuted,
-    fontWeight: '600',
+    fontWeight: 'bold',
+    fontSize: 12,
   },
   saveBtn: {
     flex: 2,
     backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingVertical: 11,
+    borderRadius: 10,
     alignItems: 'center',
   },
-  saveBtnText: {
+  disabledSaveBtn: {
+    backgroundColor: COLORS.border,
+  },
+  saveText: {
     color: COLORS.white,
     fontWeight: 'bold',
+    fontSize: 12,
   },
 });
