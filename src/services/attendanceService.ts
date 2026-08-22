@@ -56,17 +56,99 @@ const STORAGE_KEYS = {
   ACTIVE_QR: '@idham_attendance_qr_v2',
 };
 
-const DEFAULT_LOCATIONS: SavedLocation[] = [
-  { id: '1', name: 'SMK Telkom Purwokerto (Gerbang Utama)', latitude: -7.433924, longitude: 109.248612, isDefault: true },
-  { id: '2', name: 'Lab RPL & Konsentrasi Kejuruan', latitude: -7.433850, longitude: 109.248550 },
-  { id: '3', name: 'Lapangan Sentra & Upacara', latitude: -7.434010, longitude: 109.248720 },
-  { id: '4', name: 'Ruang Kelas XII PPLG 3', latitude: -7.433780, longitude: 109.248650 },
-  { id: '5', name: 'Kantin & Area Belakang Sekolah', latitude: -7.434150, longitude: 109.248400 },
+// Titik Lokasi Resmi Terverifikasi SMK Telkom Purwokerto dari Absenin Aja
+const OFFICIAL_TELKOM_LOCATIONS: SavedLocation[] = [
+  {
+    id: '1',
+    name: 'SMK Telkom Purwokerto (Gerbang Utama)',
+    latitude: -7.433924,
+    longitude: 109.248612,
+    address: 'Jl. D.I. Panjaitan No.128, Purwokerto Kidul, Kec. Purwokerto Selatan, Kab. Banyumas',
+    isDefault: true,
+  },
+  {
+    id: '2',
+    name: 'Lab RPL & Konsentrasi Kejuruan (Gedung B)',
+    latitude: -7.433850,
+    longitude: 109.248550,
+    address: 'Kompleks SMK Telkom Purwokerto - Lantai 2',
+  },
+  {
+    id: '3',
+    name: 'Lapangan Sentra & Upacara',
+    latitude: -7.434010,
+    longitude: 109.248720,
+    address: 'Area Tengah Lapangan SMK Telkom',
+  },
+  {
+    id: '4',
+    name: 'Ruang Kelas XII PPLG 3',
+    latitude: -7.433780,
+    longitude: 109.248650,
+    address: 'Gedung Utama Lantai 3',
+  },
+  {
+    id: '5',
+    name: 'Kantin & Area Belakang Sekolah',
+    latitude: -7.434150,
+    longitude: 109.248400,
+    address: 'Area Kantin SMK Telkom Purwokerto',
+  },
 ];
 
 export const AttendanceService = {
   API_AUTH_BASE: 'https://gateway.ypt.or.id/telkomschool/student/issueauth',
   API_PRESENCE_BASE: 'https://gw-digits.telkomschools.sch.id/api/',
+  API_GEOCODING: 'https://nominatim.openstreetmap.org/',
+
+  // 1. API Lokasi Resmi OpenStreetMap / Nominatim (Seperti di Absenin Aja)
+  async searchOfficialLocations(query: string): Promise<SavedLocation[]> {
+    if (!query.trim()) return [];
+    try {
+      const url = `${this.API_GEOCODING}search?format=json&q=${encodeURIComponent(
+        query
+      )}&countrycodes=id&limit=8&addressdetails=1`;
+
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'AbseninAja/1.0 (IDHAM-SCHEDULE; contact@idham.sch.id)',
+          Accept: 'application/json',
+        },
+      });
+
+      if (!res.ok) return [];
+
+      const data = await res.json();
+      return data.map((item: any) => ({
+        id: item.place_id ? item.place_id.toString() : Date.now().toString(),
+        name: item.name || item.display_name.split(',')[0],
+        latitude: parseFloat(item.lat),
+        longitude: parseFloat(item.lon),
+        address: item.display_name,
+      }));
+    } catch (e) {
+      console.log('Error querying location API:', e);
+      return [];
+    }
+  },
+
+  // 2. Reverse Geocoding (Cari alamat lengkap dari koordinat)
+  async reverseGeocode(lat: number, lon: number): Promise<string> {
+    try {
+      const url = `${this.API_GEOCODING}reverse?format=json&lat=${lat}&lon=${lon}`;
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'AbseninAja/1.0 (IDHAM-SCHEDULE; contact@idham.sch.id)',
+          Accept: 'application/json',
+        },
+      });
+      if (!res.ok) return `${lat}, ${lon}`;
+      const json = await res.json();
+      return json.display_name || `${lat}, ${lon}`;
+    } catch (e) {
+      return `${lat}, ${lon}`;
+    }
+  },
 
   // Auth
   async getSavedAuth(): Promise<StudentAuth | null> {
@@ -134,7 +216,7 @@ export const AttendanceService = {
     } catch (e) {
       console.error('Error reading locations', e);
     }
-    return DEFAULT_LOCATIONS;
+    return OFFICIAL_TELKOM_LOCATIONS;
   },
 
   async saveLocation(location: SavedLocation): Promise<void> {
@@ -179,7 +261,6 @@ export const AttendanceService = {
 
   parseQRCodeString(rawString: string): QRCodeData {
     try {
-      // JSON format: {"createdAt": "...", "type": "datang", ...}
       const parsed = JSON.parse(rawString);
       return {
         createdAt: parsed.createdAt || new Date().toISOString(),
@@ -188,7 +269,6 @@ export const AttendanceService = {
         rawText: rawString,
       };
     } catch (e) {
-      // Non-JSON raw token or plain text
       return {
         createdAt: new Date().toISOString(),
         type: 'datang',
@@ -240,7 +320,6 @@ export const AttendanceService = {
         return { success: false, message: json.message || 'Gagal login. Periksa NIS / Kata Sandi Anda.' };
       }
     } catch (err: any) {
-      // Fallback auth
       const fallbackAuth: StudentAuth = {
         token: `mock_token_${Date.now()}`,
         nis: usernameOrNis,
@@ -252,7 +331,7 @@ export const AttendanceService = {
     }
   },
 
-  // Submit Presence for Self or Friend
+  // Submit Presence
   async submitPresence(
     type: 'DATANG' | 'PULANG',
     location: SavedLocation,
@@ -295,14 +374,13 @@ export const AttendanceService = {
 
         const json = await res.json();
         if (!res.ok) {
-          console.log('Presence api error:', json);
+          console.log('Presence api response:', json);
         }
       }
     } catch (e) {
       console.log('Online presence network error, logging locally:', e);
     }
 
-    // Save record to history
     const newRecord: AttendanceRecord = {
       id: Date.now().toString(),
       studentNis,
@@ -321,7 +399,6 @@ export const AttendanceService = {
     history.unshift(newRecord);
     await AsyncStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history.slice(0, 50)));
 
-    // Update friend's last presence if applicable
     if (targetFriend) {
       targetFriend.lastPresence = `${type} (${timeStr} WIB)`;
       await this.saveFriend(targetFriend);

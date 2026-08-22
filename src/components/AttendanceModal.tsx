@@ -41,14 +41,16 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Locations & Filter
+  // Locations & Search
   const [locations, setLocations] = useState<SavedLocation[]>([]);
   const [selectedLoc, setSelectedLoc] = useState<SavedLocation | null>(null);
   const [locationSearch, setLocationSearch] = useState('');
+  const [apiSearchResults, setApiSearchResults] = useState<SavedLocation[]>([]);
+  const [isSearchingApi, setIsSearchingApi] = useState(false);
+  const [showAddLocation, setShowAddLocation] = useState(false);
   const [newLocName, setNewLocName] = useState('');
   const [newLocLat, setNewLocLat] = useState('-7.433924');
   const [newLocLng, setNewLocLng] = useState('109.248612');
-  const [showAddLocation, setShowAddLocation] = useState(false);
 
   // Friends & Filter
   const [friends, setFriends] = useState<FriendStudent[]>([]);
@@ -207,7 +209,29 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
     ]);
   };
 
-  // Locations CRUD
+  // Search API Geocoding
+  const handleSearchApiLocations = async () => {
+    if (!locationSearch.trim()) return;
+    setIsSearchingApi(true);
+    const results = await AttendanceService.searchOfficialLocations(locationSearch.trim());
+    setIsSearchingApi(false);
+    setApiSearchResults(results);
+    if (results.length === 0) {
+      Alert.alert('Tidak Ditemukan', 'Tidak ada lokasi yang cocok dari API Geocoding.');
+    }
+  };
+
+  const handleSelectApiResult = async (item: SavedLocation) => {
+    await AttendanceService.saveLocation(item);
+    const list = await AttendanceService.getLocations();
+    setLocations(list);
+    setSelectedLoc(item);
+    setApiSearchResults([]);
+    setLocationSearch('');
+    Alert.alert('Lokasi API Terpasang! 📍', `Titik ${item.name} (${item.latitude}, ${item.longitude}) berhasil di-embed ke aplikasi.`);
+  };
+
+  // Locations CRUD Manual
   const handleAddLocation = async () => {
     if (!newLocName.trim() || isNaN(Number(newLocLat)) || isNaN(Number(newLocLng))) {
       Alert.alert('Lengkapi Data', 'Nama lokasi dan koordinat Latitude/Longitude harus valid.');
@@ -275,7 +299,6 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
         if (file.mimeType?.includes('json') || file.mimeType?.includes('text')) {
           content = await FileSystem.readAsStringAsync(file.uri);
         } else {
-          // If image, create a mock structured QR payload
           content = JSON.stringify({
             createdAt: new Date().toISOString(),
             type: 'datang',
@@ -296,7 +319,6 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
     }
   };
 
-  // Filtered lists
   const filteredLocations = locations.filter(l =>
     l.name.toLowerCase().includes(locationSearch.toLowerCase())
   );
@@ -363,7 +385,6 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
               <View style={styles.tabContent}>
                 {auth ? (
                   <>
-                    {/* Target Siswa Selector (Diri Sendiri atau Teman) */}
                     <Text style={styles.sectionLabel}>Pilih Target Presensi:</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalChips}>
                       <TouchableOpacity
@@ -404,8 +425,7 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
                       ))}
                     </ScrollView>
 
-                    {/* Titik Lokasi Presensi Terpilih */}
-                    <Text style={styles.sectionLabel}>Titik Lokasi Presensi:</Text>
+                    <Text style={styles.sectionLabel}>Titik Lokasi Presensi Terpilih:</Text>
                     <View style={styles.selectedLocCard}>
                       <View style={styles.selectedLocInfo}>
                         <Text style={styles.selectedLocName}>
@@ -414,6 +434,11 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
                         <Text style={styles.selectedLocCoords}>
                           Lat: {selectedLoc?.latitude} | Long: {selectedLoc?.longitude}
                         </Text>
+                        {selectedLoc?.address && (
+                          <Text style={styles.selectedLocAddress} numberOfLines={2}>
+                            {selectedLoc.address}
+                          </Text>
+                        )}
                       </View>
                       <TouchableOpacity
                         style={styles.changeLocBtn}
@@ -423,7 +448,6 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
                       </TouchableOpacity>
                     </View>
 
-                    {/* Active QR Badge if embedded */}
                     {activeQR && (
                       <View style={styles.qrBadge}>
                         <Text style={styles.qrBadgeIcon}>📷</Text>
@@ -439,7 +463,6 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
                       </View>
                     )}
 
-                    {/* Big Action Buttons */}
                     <View style={styles.actionButtonsRow}>
                       <TouchableOpacity
                         style={[styles.actionBtn, styles.checkInBtn]}
@@ -468,7 +491,6 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
                       </TouchableOpacity>
                     </View>
 
-                    {/* Batch All Friends Button */}
                     {friends.length > 0 && (
                       <TouchableOpacity
                         style={styles.batchBtn}
@@ -523,7 +545,7 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
               </View>
             )}
 
-            {/* 2. FRIENDS TAB (Titip Absen & Filter Teman) */}
+            {/* 2. FRIENDS TAB */}
             {activeTab === 'friends' && (
               <View style={styles.tabContent}>
                 <View style={styles.searchRow}>
@@ -620,26 +642,61 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
               </View>
             )}
 
-            {/* 3. LOCATIONS TAB (Filter Lokasi & Embed Koordinat) */}
+            {/* 3. LOCATIONS TAB (Dengan Pencarian API Geocoding Resmi) */}
             {activeTab === 'locations' && (
               <View style={styles.tabContent}>
                 <View style={styles.searchRow}>
                   <TextInput
                     style={styles.searchInput}
-                    placeholder="🔍 Filter lokasi presensi..."
+                    placeholder="🔍 Cari lokasi / gedung via API Geocoding..."
                     placeholderTextColor={COLORS.textLight}
                     value={locationSearch}
                     onChangeText={setLocationSearch}
+                    onSubmitEditing={handleSearchApiLocations}
                   />
+                  <TouchableOpacity
+                    style={styles.searchApiBtn}
+                    onPress={handleSearchApiLocations}
+                    disabled={isSearchingApi}
+                  >
+                    {isSearchingApi ? (
+                      <ActivityIndicator size="small" color={COLORS.white} />
+                    ) : (
+                      <Text style={styles.searchApiBtnText}>Cari API</Text>
+                    )}
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.addSmallBtn}
                     onPress={() => setShowAddLocation(!showAddLocation)}
                   >
                     <Text style={styles.addSmallBtnText}>
-                      {showAddLocation ? '✕' : '+ Lokasi'}
+                      {showAddLocation ? '✕' : '+ Manual'}
                     </Text>
                   </TouchableOpacity>
                 </View>
+
+                {/* API Search Results Box */}
+                {apiSearchResults.length > 0 && (
+                  <View style={styles.apiResultBox}>
+                    <Text style={styles.apiResultTitle}>Hasil Pencarian API Geocoding:</Text>
+                    {apiSearchResults.map(res => (
+                      <TouchableOpacity
+                        key={res.id}
+                        style={styles.apiResultItem}
+                        onPress={() => handleSelectApiResult(res)}
+                      >
+                        <Text style={styles.apiResultName}>📍 {res.name}</Text>
+                        <Text style={styles.apiResultAddress} numberOfLines={2}>
+                          {res.address}
+                        </Text>
+                        <Text style={styles.apiResultCoords}>
+                          Lat: {res.latitude} | Long: {res.longitude}
+                        </Text>
+                        <Text style={styles.embedHint}>+ Gunakan Titik Ini ↗</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
 
                 {showAddLocation && (
                   <View style={styles.formBox}>
@@ -676,6 +733,7 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
                   </View>
                 )}
 
+                <Text style={styles.sectionLabel}>Titik Lokasi Tersimpan & Resmi:</Text>
                 {filteredLocations.map(loc => {
                   const isSelected = selectedLoc?.id === loc.id;
                   return (
@@ -697,6 +755,11 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
                         <Text style={styles.listItemSub}>
                           Lat: {loc.latitude} | Long: {loc.longitude}
                         </Text>
+                        {loc.address && (
+                          <Text style={styles.listItemAddress} numberOfLines={1}>
+                            {loc.address}
+                          </Text>
+                        )}
                       </View>
 
                       {!loc.isDefault && (
@@ -923,6 +986,11 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     marginTop: 2,
   },
+  selectedLocAddress: {
+    fontSize: 10,
+    color: COLORS.textBody,
+    marginTop: 2,
+  },
   changeLocBtn: {
     backgroundColor: COLORS.white,
     paddingHorizontal: 10,
@@ -1047,7 +1115,7 @@ const styles = StyleSheet.create({
   },
   searchRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
   },
   searchInput: {
     flex: 1,
@@ -1059,9 +1127,22 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     fontSize: 11,
   },
+  searchApiBtn: {
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchApiBtnText: {
+    color: COLORS.white,
+    fontWeight: 'bold',
+    fontSize: 10,
+  },
   addSmallBtn: {
     backgroundColor: COLORS.primary,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
     alignItems: 'center',
@@ -1070,7 +1151,50 @@ const styles = StyleSheet.create({
   addSmallBtnText: {
     color: COLORS.white,
     fontWeight: 'bold',
+    fontSize: 10,
+  },
+  apiResultBox: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 10,
+    padding: 8,
+    gap: 6,
+  },
+  apiResultTitle: {
     fontSize: 11,
+    fontWeight: 'bold',
+    color: '#1D4ED8',
+  },
+  apiResultItem: {
+    backgroundColor: COLORS.white,
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  apiResultName: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: COLORS.textDark,
+  },
+  apiResultAddress: {
+    fontSize: 9,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  apiResultCoords: {
+    fontSize: 9,
+    color: '#1D4ED8',
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  embedHint: {
+    fontSize: 10,
+    color: '#2563EB',
+    fontWeight: 'bold',
+    marginTop: 4,
+    alignSelf: 'flex-end',
   },
   formBox: {
     backgroundColor: COLORS.primaryLight,
@@ -1142,6 +1266,11 @@ const styles = StyleSheet.create({
   listItemSub: {
     fontSize: 10,
     color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  listItemAddress: {
+    fontSize: 9,
+    color: COLORS.textBody,
     marginTop: 2,
   },
   lastPresenceText: {
