@@ -1,10 +1,9 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { DayName, DaySchedule, MeetingAgenda, ScheduleItem } from '../types';
+import { DayName, DaySchedule, MeetingAgenda, ScheduleItem, TaskAssignment } from '../types';
 import { ScheduleService } from './scheduleService';
 import { StorageService } from './storage';
 
-// Configure notification behavior
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -47,6 +46,14 @@ export const NotificationService = {
         lightColor: '#D90000',
         sound: 'default',
       });
+
+      await Notifications.setNotificationChannelAsync('task-reminders', {
+        name: 'Pengingat Deadline Tugas & File',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 500, 250, 500],
+        lightColor: '#D90000',
+        sound: 'default',
+      });
     }
 
     return true;
@@ -58,13 +65,11 @@ export const NotificationService = {
     const hasPermission = await this.requestPermissions();
     if (!hasPermission) return;
 
-    // Cancel all existing scheduled notifications first
     await Notifications.cancelAllScheduledNotificationsAsync();
 
     const settings = await StorageService.getSettings();
     const minutesBefore = settings.notifyBeforeMinutes;
 
-    // If disabled (0 minutes), do not schedule
     if (minutesBefore <= 0) return;
 
     const currentClass = settings.defaultClass || 'XII PPLG 3';
@@ -157,11 +162,53 @@ export const NotificationService = {
         }
       }
     }
+
+    // 3. Schedule Task / Assignment Deadlines Reminders
+    const tasks = await StorageService.getTasks();
+    for (const task of tasks) {
+      if (task.isCompleted) continue;
+
+      const [tYear, tMonth, tDay] = task.deadlineDate.split('-').map(Number);
+      const [tH, tM] = task.deadlineTime.split(':').map(Number);
+
+      if (isNaN(tYear) || isNaN(tMonth) || isNaN(tDay) || isNaN(tH) || isNaN(tM)) continue;
+
+      const deadlineDate = new Date(tYear, tMonth - 1, tDay, tH, tM);
+      const triggerDate = new Date(deadlineDate.getTime() - minutesBefore * 60 * 1000);
+
+      if (triggerDate > now) {
+        const fileStatus = task.attachedFileName
+          ? `(File lampiran: ${task.attachedFileName} sudah siap)`
+          : `(Segera kumpulkan file tugas!)`;
+
+        const reminderText =
+          minutesBefore >= 60
+            ? `1 jam lagi (${task.deadlineTime} WIB)`
+            : `${minutesBefore} menit lagi (${task.deadlineTime} WIB)`;
+
+        try {
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: `⚠️ Deadline Tugas: ${task.title} [${task.subject}]`,
+              body: `Batas pengumpulan ${reminderText}. ${fileStatus}`,
+              sound: true,
+              data: { type: 'task', taskId: task.id },
+            },
+            trigger: {
+              type: Notifications.SchedulableTriggerInputTypes.DATE,
+              date: triggerDate,
+            },
+          });
+        } catch (e) {
+          console.log(`Failed to schedule task reminder ${task.title}:`, e);
+        }
+      }
+    }
   },
 
   async sendInstantTestNotification(): Promise<void> {
     if (Platform.OS === 'web') {
-      alert('🔔 [TEST NOTIFIKASI] Pengingat jadwal aktif: 30 menit sebelum pelajaran dimulai!');
+      alert('🔔 [TEST NOTIFIKASI] Pengingat jadwal dan deadline tugas aktif!');
       return;
     }
 
@@ -169,10 +216,10 @@ export const NotificationService = {
     await Notifications.scheduleNotificationAsync({
       content: {
         title: '🔔 Test Pengingat IDHAM SCHEDULE',
-        body: 'Notifikasi berhasil diuji! Anda akan diingatkan sebelum waktu pelajaran/meeting dimulai.',
+        body: 'Notifikasi berhasil diuji! Anda akan diingatkan sebelum waktu pelajaran, meeting, dan deadline tugas.',
         sound: true,
       },
-      trigger: null, // trigger immediately
+      trigger: null,
     });
   },
 };

@@ -1,18 +1,20 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ChatMessage, MeetingAgenda, ScheduleOverride, UserSettings } from '../types';
+import { ChatMessage, KnowledgeDocument, MeetingAgenda, ScheduleOverride, TaskAssignment, UserSettings } from '../types';
 import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from './supabase';
 
 const KEYS = {
   SETTINGS: '@idham_settings_v1',
   OVERRIDES: '@idham_overrides_v1',
   MEETINGS: '@idham_meetings_v1',
+  TASKS: '@idham_tasks_v1',
+  KNOWLEDGE: '@idham_knowledge_v1',
   CHATS: '@idham_chats_v1',
 };
 
 const DEFAULT_SETTINGS: UserSettings = {
   userName: 'Idham',
   defaultClass: 'XII PPLG 3',
-  notifyBeforeMinutes: 15,
+  notifyBeforeMinutes: 30,
   enableVibration: true,
 };
 
@@ -60,7 +62,6 @@ export const StorageService = {
       filtered.push(override);
       await AsyncStorage.setItem(KEYS.OVERRIDES, JSON.stringify(filtered));
 
-      // Background Sync to Supabase if connected
       if (isSupabaseConfigured()) {
         supabase
           .from('schedule_overrides')
@@ -74,9 +75,7 @@ export const StorageService = {
             new_room: override.newRoom,
             note: override.note,
           })
-          .then(({ error }) => {
-            if (error) console.log('Supabase sync override note:', error.message);
-          });
+          .then();
       }
     } catch (e) {
       console.error('Error saving override', e);
@@ -89,7 +88,6 @@ export const StorageService = {
       const filtered = existing.filter(o => o.id !== id);
       await AsyncStorage.setItem(KEYS.OVERRIDES, JSON.stringify(filtered));
 
-      // Background Delete from Supabase
       if (isSupabaseConfigured()) {
         supabase.from('schedule_overrides').delete().eq('id', id).then();
       }
@@ -121,7 +119,6 @@ export const StorageService = {
       existing.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
       await AsyncStorage.setItem(KEYS.MEETINGS, JSON.stringify(existing));
 
-      // Background Sync to Supabase if connected
       if (isSupabaseConfigured()) {
         supabase
           .from('meetings')
@@ -134,9 +131,7 @@ export const StorageService = {
             notes: meeting.notes,
             is_completed: meeting.isCompleted,
           })
-          .then(({ error }) => {
-            if (error) console.log('Supabase sync meeting error:', error.message);
-          });
+          .then();
       }
     } catch (e) {
       console.error('Error saving meeting', e);
@@ -149,7 +144,6 @@ export const StorageService = {
       const filtered = existing.filter(m => m.id !== id);
       await AsyncStorage.setItem(KEYS.MEETINGS, JSON.stringify(filtered));
 
-      // Background Delete from Supabase
       if (isSupabaseConfigured()) {
         supabase.from('meetings').delete().eq('id', id).then();
       }
@@ -166,17 +160,98 @@ export const StorageService = {
         item.isCompleted = !item.isCompleted;
         await AsyncStorage.setItem(KEYS.MEETINGS, JSON.stringify(existing));
 
-        // Sync state to Supabase
         if (isSupabaseConfigured()) {
-          supabase
-            .from('meetings')
-            .update({ is_completed: item.isCompleted })
-            .eq('id', id)
-            .then();
+          supabase.from('meetings').update({ is_completed: item.isCompleted }).eq('id', id).then();
         }
       }
     } catch (e) {
       console.error('Error toggling meeting', e);
+    }
+  },
+
+  // Task Assignments (Tugas & File Lampiran)
+  async getTasks(): Promise<TaskAssignment[]> {
+    try {
+      const data = await AsyncStorage.getItem(KEYS.TASKS);
+      if (data) return JSON.parse(data);
+    } catch (e) {
+      console.error('Error reading tasks', e);
+    }
+    return [];
+  },
+
+  async saveTask(task: TaskAssignment): Promise<void> {
+    try {
+      const existing = await this.getTasks();
+      const index = existing.findIndex(t => t.id === task.id);
+      if (index >= 0) {
+        existing[index] = task;
+      } else {
+        existing.push(task);
+      }
+      existing.sort((a, b) => `${a.deadlineDate} ${a.deadlineTime}`.localeCompare(`${b.deadlineDate} ${b.deadlineTime}`));
+      await AsyncStorage.setItem(KEYS.TASKS, JSON.stringify(existing));
+    } catch (e) {
+      console.error('Error saving task', e);
+    }
+  },
+
+  async deleteTask(id: string): Promise<void> {
+    try {
+      const existing = await this.getTasks();
+      const filtered = existing.filter(t => t.id !== id);
+      await AsyncStorage.setItem(KEYS.TASKS, JSON.stringify(filtered));
+    } catch (e) {
+      console.error('Error deleting task', e);
+    }
+  },
+
+  async toggleTaskCompleted(id: string): Promise<void> {
+    try {
+      const existing = await this.getTasks();
+      const item = existing.find(t => t.id === id);
+      if (item) {
+        item.isCompleted = !item.isCompleted;
+        await AsyncStorage.setItem(KEYS.TASKS, JSON.stringify(existing));
+      }
+    } catch (e) {
+      console.error('Error toggling task', e);
+    }
+  },
+
+  // Knowledge Base (Dokumen yang dipelajari bot)
+  async getKnowledgeDocs(): Promise<KnowledgeDocument[]> {
+    try {
+      const data = await AsyncStorage.getItem(KEYS.KNOWLEDGE);
+      if (data) return JSON.parse(data);
+    } catch (e) {
+      console.error('Error reading knowledge docs', e);
+    }
+    return [];
+  },
+
+  async saveKnowledgeDoc(doc: KnowledgeDocument): Promise<void> {
+    try {
+      const existing = await this.getKnowledgeDocs();
+      const index = existing.findIndex(d => d.id === doc.id);
+      if (index >= 0) {
+        existing[index] = doc;
+      } else {
+        existing.unshift(doc);
+      }
+      await AsyncStorage.setItem(KEYS.KNOWLEDGE, JSON.stringify(existing));
+    } catch (e) {
+      console.error('Error saving knowledge doc', e);
+    }
+  },
+
+  async deleteKnowledgeDoc(id: string): Promise<void> {
+    try {
+      const existing = await this.getKnowledgeDocs();
+      const filtered = existing.filter(d => d.id !== id);
+      await AsyncStorage.setItem(KEYS.KNOWLEDGE, JSON.stringify(filtered));
+    } catch (e) {
+      console.error('Error deleting knowledge doc', e);
     }
   },
 

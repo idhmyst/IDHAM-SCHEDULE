@@ -30,7 +30,6 @@ export default function App() {
     if (s && s.defaultClass) {
       setCurrentClass(s.defaultClass);
     }
-    // Schedule local notification reminders for schedules & meetings
     await NotificationService.scheduleAllReminders();
   };
 
@@ -127,7 +126,7 @@ export default function App() {
                 activeTab === 'meeting' && styles.activeNavLabel,
               ]}
             >
-              Meeting
+              Tugas & Agenda
             </Text>
           </TouchableOpacity>
 

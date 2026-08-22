@@ -2,13 +2,13 @@ export type DayName = 'senin' | 'selasa' | 'rabu' | 'kamis' | 'jumat' | 'sabtu' 
 
 export interface ScheduleItem {
   id: string;
-  period: number; // 0 for Tadarus/Apel, 1..11 for class periods
-  time: string; // e.g. "07.40 - 08.20"
-  startTime: string; // "07:40"
-  endTime: string; // "08:20"
-  subjectCode: string; // "MTK-4", "PAI-3", etc.
-  subjectName: string; // "Matematika", "Pendidikan Agama Islam", etc.
-  room: string; // "B.3.2", "A.2.6", "D.1.2", etc.
+  period: number;
+  time: string;
+  startTime: string;
+  endTime: string;
+  subjectCode: string;
+  subjectName: string;
+  room: string;
   description?: string;
   isBreak?: boolean;
 }
@@ -49,13 +49,38 @@ export interface MeetingAgenda {
   createdAt: string;
 }
 
+export interface TaskAssignment {
+  id: string;
+  title: string;
+  subject: string; // e.g. "Matematika (MTK-4)"
+  deadlineDate: string; // YYYY-MM-DD
+  deadlineTime: string; // HH:mm
+  description?: string;
+  attachedFileName?: string;
+  attachedFileUri?: string;
+  isCompleted: boolean;
+  createdAt: string;
+}
+
+export interface KnowledgeDocument {
+  id: string;
+  title: string;
+  fileName: string;
+  fileUri?: string;
+  textContent: string;
+  summary?: string;
+  tags?: string[];
+  createdAt: string;
+}
+
 export interface ChatMessage {
   id: string;
   sender: 'user' | 'bot';
   text: string;
   timestamp: string;
   quickReplies?: string[];
-  actionType?: 'schedule' | 'meeting' | 'override' | 'general';
+  actionType?: 'schedule' | 'meeting' | 'override' | 'task' | 'knowledge' | 'general';
+  attachedFileName?: string;
 }
 
 export interface UserSettings {

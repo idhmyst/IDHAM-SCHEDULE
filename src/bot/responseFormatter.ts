@@ -1,26 +1,38 @@
-import { DayName, DaySchedule, MeetingAgenda } from '../types';
+import { DayName, DaySchedule, MeetingAgenda, TaskAssignment } from '../types';
 import { ScheduleService } from '../services/scheduleService';
 import { StorageService } from '../services/storage';
+import { KnowledgeService } from '../services/knowledgeService';
+import { NotificationService } from '../services/notificationService';
 import { UNIFORMS } from '../data/masterSchedule';
 import { parseUserQuery, ParsedQuery } from './nlpEngine';
 
 export interface BotResponseResult {
   text: string;
   quickReplies?: string[];
-  actionType?: 'schedule' | 'meeting' | 'override' | 'general';
-  openModal?: 'meeting' | 'override';
+  actionType?: 'schedule' | 'meeting' | 'override' | 'task' | 'knowledge' | 'general';
+  openModal?: 'meeting' | 'override' | 'task' | 'knowledge';
   modalData?: any;
 }
 
 export async function generateBotResponse(userInput: string, currentClass: string): Promise<BotResponseResult> {
+  // First, check if the question matches any learned document in Knowledge Base!
+  const knowledgeMatch = await KnowledgeService.searchKnowledge(userInput);
+  if (knowledgeMatch && userInput.length > 5 && !['jadwal', 'tugas', 'meeting', 'seragam'].includes(userInput.toLowerCase().trim())) {
+    return {
+      text: `📚 **Berdasarkan Dokumen Terpelajari [${knowledgeMatch.doc.title}]:**\n\n${knowledgeMatch.snippet}\n\n*File Sumber: ${knowledgeMatch.doc.fileName}*`,
+      quickReplies: ['📂 Buka Dokumen Lain', '📅 Jadwal Hari Ini', '📝 Daftar Tugas'],
+      actionType: 'knowledge',
+    };
+  }
+
   const parsed = parseUserQuery(userInput);
   const now = new Date();
 
   switch (parsed.intent) {
     case 'GREETING': {
       return {
-        text: `Halo Idham! 👋 Ada yang bisa saya bantu untuk jadwal kelas **${currentClass}** atau agenda meeting hari ini?`,
-        quickReplies: ['📅 Jadwal Hari Ini', '📍 Ruangan Sekarang', '👕 Seragam Hari Ini', '📋 Jadwal Besok'],
+        text: `Halo Idham! 👋 Ada yang bisa saya bantu untuk jadwal kelas **${currentClass}**, tugas sekolah, atau agenda meeting hari ini?`,
+        quickReplies: ['📅 Jadwal Hari Ini', '📝 Daftar Tugas', '📍 Ruangan Sekarang', '📎 Upload File Belajar'],
         actionType: 'general',
       };
     }
@@ -30,13 +42,77 @@ export async function generateBotResponse(userInput: string, currentClass: strin
         text: `🤖 **Panduan Perintah IDHAM SCHEDULE Bot:**\n\n` +
           `• 📅 **Tanya Jadwal:** *"Jadwal hari ini"*, *"Jadwal besok"*, *"Jadwal hari Rabu"*\n` +
           `• 📍 **Tanya Ruangan:** *"Ruangan sekarang"*, *"Sekarang di mana?"*\n` +
+          `• 📝 **Tugas & Deadline:** *"Daftar tugas"*, *"Ingatkan tugas MTK besok jam 23.59"*\n` +
+          `• 📎 **Belajar Dokumen Baru:** *"Upload file"*, *"Belajar file"* (Kirim dokumen catatan/materi)\n` +
+          `• 📌 **Janji Meeting:** *"Ingatkan meeting OSIS besok jam 14.00 di Sentra"*\n` +
           `• 👕 **Tanya Seragam:** *"Seragam besok apa?"*, *"Pakaian hari Kamis"*\n` +
-          `• 📝 **Janji Meeting:** *"Ingatkan meeting OSIS besok jam 14.00 di Sentra"*\n` +
-          `• 📋 **Cek Agenda:** *"Daftar meeting saya"*\n` +
           `• ✏️ **Ubah Jadwal:** *"Ubah jadwal hari Kamis jam 3"*\n` +
           `• 🧹 **Bersihkan Obrolan:** *"Hapus chat"*`,
-        quickReplies: ['📅 Jadwal Hari Ini', '📋 Jadwal Besok', '📝 Daftar Meeting'],
+        quickReplies: ['📅 Jadwal Hari Ini', '📝 Daftar Tugas', '📎 Upload File Belajar'],
         actionType: 'general',
+      };
+    }
+
+    case 'LEARN_DOCUMENT': {
+      return {
+        text: `📂 **Upload Dokumen Pembelajaran Baru:**\n\nSilakan pilih file (PDF, TXT, Catatan Tugas) agar saya bisa mempelajarinya dan menjawab pertanyaan Anda di masa mendatang!`,
+        openModal: 'knowledge',
+        actionType: 'knowledge',
+        quickReplies: ['📎 Pilih File Dokumen', '📅 Jadwal Hari Ini'],
+      };
+    }
+
+    case 'ADD_TASK': {
+      if (parsed.taskDetails) {
+        const newTask: TaskAssignment = {
+          id: Date.now().toString(),
+          title: parsed.taskDetails.title,
+          subject: parsed.taskDetails.subject,
+          deadlineDate: parsed.taskDetails.deadlineDate,
+          deadlineTime: parsed.taskDetails.deadlineTime,
+          isCompleted: false,
+          createdAt: new Date().toISOString(),
+        };
+
+        return {
+          text: `📝 **Ingin Mencatat Tugas Baru?**\nSilakan lengkapi judul dan lampirkan file tugas (PDF/Docx/Gambar) sebelum batas waktu:`,
+          openModal: 'task',
+          modalData: newTask,
+          actionType: 'task',
+        };
+      }
+      return {
+        text: `Silakan isi detail tugas dan lampirkan file tugas:`,
+        openModal: 'task',
+        actionType: 'task',
+      };
+    }
+
+    case 'LIST_TASKS': {
+      const tasks = await StorageService.getTasks();
+      if (tasks.length === 0) {
+        return {
+          text: `📝 Belum ada tugas atau PR yang tercatat. Ingin menambahkan tugas baru berserta lampiran file?`,
+          quickReplies: ['➕ Tambah Tugas Baru', '📅 Jadwal Hari Ini'],
+          actionType: 'task',
+          openModal: 'task',
+        };
+      }
+
+      let text = `📝 **Daftar Tugas & Deadline Idham:**\n\n`;
+      tasks.forEach((t, idx) => {
+        const status = t.isCompleted ? '✅ *[Selesai]*' : '⏳ *[Belum Selesai]*';
+        const fileInfo = t.attachedFileName ? `\n   📎 File: *${t.attachedFileName}*` : '';
+        text += `${idx + 1}. **${t.title}** (${t.subject}) ${status}\n` +
+          `   ⏰ Deadline: **${t.deadlineDate} pukul ${t.deadlineTime} WIB**` +
+          fileInfo +
+          `\n\n`;
+      });
+
+      return {
+        text,
+        quickReplies: ['➕ Tambah Tugas Baru', '📅 Jadwal Hari Ini', '📋 Daftar Meeting'],
+        actionType: 'task',
       };
     }
 
@@ -56,7 +132,7 @@ export async function generateBotResponse(userInput: string, currentClass: strin
       if (!current && !next) {
         return {
           text: `ℹ️ **Status Sekarang (${dayLabel}):**\nSaat ini sedang di luar jam pelajaran sekolah. Nikmati waktu istirahatmu! 🎉`,
-          quickReplies: ['📋 Jadwal Besok', '📅 Jadwal Lengkap Hari Ini'],
+          quickReplies: ['📋 Jadwal Besok', '📅 Jadwal Lengkap Hari Ini', '📝 Cek Tugas'],
           actionType: 'schedule',
         };
       }
@@ -129,14 +205,10 @@ export async function generateBotResponse(userInput: string, currentClass: strin
           createdAt: new Date().toISOString(),
         };
         await StorageService.saveMeeting(newMeeting);
+        await NotificationService.scheduleAllReminders();
 
         return {
-          text: `✅ **Janji Meeting Berhasil Dicatat!**\n\n` +
-            `📌 **Agenda:** ${newMeeting.title}\n` +
-            `📅 **Tanggal:** ${newMeeting.date}\n` +
-            `⏰ **Waktu:** ${newMeeting.time} WIB\n` +
-            `📍 **Lokasi:** ${newMeeting.location}\n\n` +
-            `Saya akan mengingatkanmu sebelum waktu pertemuan tiba.`,
+          text: `✅ **Janji Meeting Berhasil Dicatat!**\n\n📌 **Agenda:** ${newMeeting.title}\n📅 **Tanggal:** ${newMeeting.date}\n⏰ **Waktu:** ${newMeeting.time} WIB\n📍 **Lokasi:** ${newMeeting.location}\n\nPengingat telah aktif dan akan membunyikan alarm sebelum waktu pertemuan tiba!`,
           quickReplies: ['📋 Lihat Semua Meeting', '➕ Tambah Meeting Baru'],
           actionType: 'meeting',
         };
@@ -196,11 +268,11 @@ export async function generateBotResponse(userInput: string, currentClass: strin
     case 'UNKNOWN':
     default: {
       return {
-        text: `Maaf Idham, saya belum sepenuhnya memahami pesan tersebut. 🤔\n\nKamu bisa bertanya hal-hal seperti:\n` +
+        text: `Maaf Idham, saya belum menemukan jawaban di jadwal atau file yang pernah Anda unggah. 🤔\n\nAnda bisa mencoba:\n` +
           `• *"Jadwal hari ini"* atau *"Ruangan sekarang di mana?"*\n` +
-          `• *"Besok seragam apa?"*\n` +
-          `• *"Ingatkan meeting besok jam 14.00 di Sentra"*`,
-        quickReplies: ['📅 Jadwal Hari Ini', '📍 Ruangan Sekarang', '📋 Jadwal Besok', '❓ Panduan Bantuan'],
+          `• *"Daftar tugas"* atau *"Tambah tugas"* (beserta lampiran file)\n` +
+          `• *"Upload file"* untuk memasukkan catatan/materi baru agar saya pelajari!`,
+        quickReplies: ['📅 Jadwal Hari Ini', '📝 Daftar Tugas', '📎 Upload File Belajar', '❓ Bantuan'],
         actionType: 'general',
       };
     }
@@ -214,7 +286,7 @@ async function formatDayScheduleResponse(className: string, day: DayName, label:
   if (!schedule || schedule.items.length === 0) {
     return {
       text: `🎉 **Jadwal ${label} (${dayLabel}) - Kelas ${className}:**\n\nHari ini libur / tidak ada jadwal pelajaran reguler. Waktunya istirahat atau mengulang materi! 🏖️`,
-      quickReplies: ['📅 Jadwal Senin', '📅 Jadwal Selasa', '📋 Daftar Meeting'],
+      quickReplies: ['📅 Jadwal Senin', '📅 Jadwal Selasa', '📝 Cek Tugas'],
       actionType: 'schedule',
     };
   }
@@ -235,7 +307,7 @@ async function formatDayScheduleResponse(className: string, day: DayName, label:
 
   return {
     text,
-    quickReplies: ['📍 Ruangan Sekarang', '👕 Seragam Hari Ini', '✏️ Ubah Jadwal', '📋 Jadwal Besok'],
+    quickReplies: ['📍 Ruangan Sekarang', '📝 Cek Tugas', '✏️ Ubah Jadwal', '📋 Jadwal Besok'],
     actionType: 'schedule',
   };
 }

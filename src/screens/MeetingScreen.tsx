@@ -8,12 +8,16 @@ import {
   SafeAreaView,
   RefreshControl,
   Alert,
+  Platform,
 } from 'react-native';
+import * as Sharing from 'expo-sharing';
 import { COLORS } from '../constants/theme';
-import { MeetingAgenda } from '../types';
+import { MeetingAgenda, TaskAssignment } from '../types';
 import { Header } from '../components/Header';
 import { MeetingModal } from '../components/MeetingModal';
+import { TaskModal } from '../components/TaskModal';
 import { StorageService } from '../services/storage';
+import { NotificationService } from '../services/notificationService';
 
 interface MeetingScreenProps {
   currentClass: string;
@@ -24,41 +28,51 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({
   currentClass,
   onOpenSettings,
 }) => {
+  const [section, setSection] = useState<'tasks' | 'meetings'>('tasks');
   const [meetings, setMeetings] = useState<MeetingAgenda[]>([]);
-  const [filter, setFilter] = useState<'all' | 'upcoming' | 'completed'>('all');
+  const [tasks, setTasks] = useState<TaskAssignment[]>([]);
+  const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('all');
   const [refreshing, setRefreshing] = useState(false);
-  const [showModal, setShowModal] = useState(false);
+
+  const [showMeetingModal, setShowMeetingModal] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<MeetingAgenda | undefined>(undefined);
 
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<TaskAssignment | undefined>(undefined);
+
   useEffect(() => {
-    loadMeetings();
+    loadData();
   }, []);
 
-  const loadMeetings = async () => {
-    const data = await StorageService.getMeetings();
-    setMeetings(data);
+  const loadData = async () => {
+    const m = await StorageService.getMeetings();
+    const t = await StorageService.getTasks();
+    setMeetings(m);
+    setTasks(t);
   };
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadMeetings();
+    await loadData();
     setRefreshing(false);
   };
 
-  const handleToggleComplete = async (id: string) => {
+  // Meeting Handlers
+  const handleToggleMeetingComplete = async (id: string) => {
     await StorageService.toggleMeetingCompleted(id);
-    await loadMeetings();
+    await loadData();
   };
 
-  const handleDelete = async (id: string) => {
-    Alert.alert('Hapus Agenda', 'Apakah Anda yakin ingin menghapus agenda meeting ini?', [
+  const handleDeleteMeeting = async (id: string) => {
+    Alert.alert('Hapus Meeting', 'Yakin ingin menghapus agenda meeting ini?', [
       { text: 'Batal', style: 'cancel' },
       {
         text: 'Hapus',
         style: 'destructive',
         onPress: async () => {
           await StorageService.deleteMeeting(id);
-          await loadMeetings();
+          await loadData();
+          await NotificationService.scheduleAllReminders();
         },
       },
     ]);
@@ -66,11 +80,59 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({
 
   const handleSaveMeeting = async (meeting: MeetingAgenda) => {
     await StorageService.saveMeeting(meeting);
-    await loadMeetings();
+    await loadData();
+    await NotificationService.scheduleAllReminders();
   };
 
+  // Task Handlers
+  const handleToggleTaskComplete = async (id: string) => {
+    await StorageService.toggleTaskCompleted(id);
+    await loadData();
+  };
+
+  const handleDeleteTask = async (id: string) => {
+    Alert.alert('Hapus Tugas', 'Yakin ingin menghapus tugas ini?', [
+      { text: 'Batal', style: 'cancel' },
+      {
+        text: 'Hapus',
+        style: 'destructive',
+        onPress: async () => {
+          await StorageService.deleteTask(id);
+          await loadData();
+          await NotificationService.scheduleAllReminders();
+        },
+      },
+    ]);
+  };
+
+  const handleSaveTask = async (task: TaskAssignment) => {
+    await StorageService.saveTask(task);
+    await loadData();
+    await NotificationService.scheduleAllReminders();
+  };
+
+  const handleOpenFile = async (fileUri?: string) => {
+    if (!fileUri) return;
+    try {
+      if (Platform.OS !== 'web' && (await Sharing.isAvailableAsync())) {
+        await Sharing.shareAsync(fileUri);
+      } else {
+        Alert.alert('File Lampiran', `Lokasi file: ${fileUri}`);
+      }
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Error', 'Tidak dapat membuka file lampiran.');
+    }
+  };
+
+  const filteredTasks = tasks.filter(t => {
+    if (filter === 'pending') return !t.isCompleted;
+    if (filter === 'completed') return t.isCompleted;
+    return true;
+  });
+
   const filteredMeetings = meetings.filter(m => {
-    if (filter === 'upcoming') return !m.isCompleted;
+    if (filter === 'pending') return !m.isCompleted;
     if (filter === 'completed') return m.isCompleted;
     return true;
   });
@@ -78,15 +140,36 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({
   return (
     <SafeAreaView style={styles.container}>
       <Header
-        title="AGENDA & MEETING"
-        subtitle="Kelola Janji Temu"
+        title="TUGAS & AGENDA"
+        subtitle="Deadline & Janji Temu"
         currentClass={currentClass}
         onClassPress={onOpenSettings}
       />
 
+      {/* Section Switcher: Tugas vs Meeting */}
+      <View style={styles.sectionHeader}>
+        <TouchableOpacity
+          style={[styles.sectionBtn, section === 'tasks' && styles.activeSectionBtn]}
+          onPress={() => setSection('tasks')}
+        >
+          <Text style={[styles.sectionBtnText, section === 'tasks' && styles.activeSectionBtnText]}>
+            📝 Tugas Sekolah ({tasks.filter(t => !t.isCompleted).length})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.sectionBtn, section === 'meetings' && styles.activeSectionBtn]}
+          onPress={() => setSection('meetings')}
+        >
+          <Text style={[styles.sectionBtnText, section === 'meetings' && styles.activeSectionBtnText]}>
+            📌 Janji Meeting ({meetings.filter(m => !m.isCompleted).length})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Filter Tabs */}
       <View style={styles.filterContainer}>
-        {(['all', 'upcoming', 'completed'] as const).map(tab => (
+        {(['all', 'pending', 'completed'] as const).map(tab => (
           <TouchableOpacity
             key={tab}
             style={[styles.filterTab, filter === tab && styles.activeFilterTab]}
@@ -94,7 +177,7 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({
             activeOpacity={0.7}
           >
             <Text style={[styles.filterText, filter === tab && styles.activeFilterText]}>
-              {tab === 'all' ? 'Semua' : tab === 'upcoming' ? 'Mendatang' : 'Selesai'}
+              {tab === 'all' ? 'Semua' : tab === 'pending' ? 'Belum Selesai' : 'Selesai'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -107,66 +190,140 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({
         }
       >
         <View style={styles.listContainer}>
-          {filteredMeetings.length > 0 ? (
-            filteredMeetings.map(meeting => (
-              <View
-                key={meeting.id}
-                style={[styles.card, meeting.isCompleted && styles.completedCard]}
-              >
-                <View style={styles.cardHeader}>
-                  <TouchableOpacity
-                    style={[styles.checkbox, meeting.isCompleted && styles.checkboxActive]}
-                    onPress={() => handleToggleComplete(meeting.id)}
-                  >
-                    {meeting.isCompleted && <Text style={styles.checkmark}>✓</Text>}
-                  </TouchableOpacity>
-
-                  <View style={styles.headerInfo}>
-                    <Text
-                      style={[styles.title, meeting.isCompleted && styles.completedText]}
+          {section === 'tasks' ? (
+            filteredTasks.length > 0 ? (
+              filteredTasks.map(task => (
+                <View
+                  key={task.id}
+                  style={[styles.card, task.isCompleted && styles.completedCard]}
+                >
+                  <View style={styles.cardHeader}>
+                    <TouchableOpacity
+                      style={[styles.checkbox, task.isCompleted && styles.checkboxActive]}
+                      onPress={() => handleToggleTaskComplete(task.id)}
                     >
-                      {meeting.title}
-                    </Text>
-                    <Text style={styles.dateTime}>
-                      📅 {meeting.date} • ⏰ {meeting.time} WIB
-                    </Text>
+                      {task.isCompleted && <Text style={styles.checkmark}>✓</Text>}
+                    </TouchableOpacity>
+
+                    <View style={styles.headerInfo}>
+                      <Text
+                        style={[styles.title, task.isCompleted && styles.completedText]}
+                      >
+                        {task.title}
+                      </Text>
+                      <Text style={styles.subjectBadge}>📖 {task.subject}</Text>
+                      <Text style={styles.dateTime}>
+                        ⏰ Deadline: **{task.deadlineDate} pukul {task.deadlineTime} WIB**
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardBody}>
+                    {task.attachedFileName ? (
+                      <TouchableOpacity
+                        style={styles.fileBox}
+                        onPress={() => handleOpenFile(task.attachedFileUri)}
+                      >
+                        <Text style={styles.fileIcon}>📎</Text>
+                        <Text style={styles.fileNameText} numberOfLines={1}>
+                          {task.attachedFileName}
+                        </Text>
+                        <Text style={styles.fileOpenHint}>Buka ↗</Text>
+                      </TouchableOpacity>
+                    ) : null}
+
+                    {task.description ? (
+                      <Text style={styles.notesText}>{task.description}</Text>
+                    ) : null}
+                  </View>
+
+                  <View style={styles.cardFooter}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setSelectedTask(task);
+                        setShowTaskModal(true);
+                      }}
+                    >
+                      <Text style={styles.editBtn}>✏️ Edit</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity onPress={() => handleDeleteTask(task.id)}>
+                      <Text style={styles.deleteBtn}>🗑️ Hapus</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
-
-                <View style={styles.cardBody}>
-                  <View style={styles.locationBadge}>
-                    <Text style={styles.locationText}>📍 {meeting.location}</Text>
-                  </View>
-
-                  {meeting.notes ? (
-                    <Text style={styles.notesText}>{meeting.notes}</Text>
-                  ) : null}
-                </View>
-
-                <View style={styles.cardFooter}>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setSelectedMeeting(meeting);
-                      setShowModal(true);
-                    }}
-                  >
-                    <Text style={styles.editBtn}>✏️ Edit</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity onPress={() => handleDelete(meeting.id)}>
-                    <Text style={styles.deleteBtn}>🗑️ Hapus</Text>
-                  </TouchableOpacity>
-                </View>
+              ))
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyIcon}>📝</Text>
+                <Text style={styles.emptyTitle}>Tidak Ada Tugas</Text>
+                <Text style={styles.emptySubtitle}>
+                  Klik tombol (+) di bawah untuk menambahkan tugas baru beserta lampiran file dokumen.
+                </Text>
               </View>
-            ))
+            )
           ) : (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>📝</Text>
-              <Text style={styles.emptyTitle}>Belum Ada Agenda</Text>
-              <Text style={styles.emptySubtitle}>
-                Gunakan tombol tambah (+) atau ketik perintah di chat bot untuk membuat agenda baru.
-              </Text>
-            </View>
+            filteredMeetings.length > 0 ? (
+              filteredMeetings.map(meeting => (
+                <View
+                  key={meeting.id}
+                  style={[styles.card, meeting.isCompleted && styles.completedCard]}
+                >
+                  <View style={styles.cardHeader}>
+                    <TouchableOpacity
+                      style={[styles.checkbox, meeting.isCompleted && styles.checkboxActive]}
+                      onPress={() => handleToggleMeetingComplete(meeting.id)}
+                    >
+                      {meeting.isCompleted && <Text style={styles.checkmark}>✓</Text>}
+                    </TouchableOpacity>
+
+                    <View style={styles.headerInfo}>
+                      <Text
+                        style={[styles.title, meeting.isCompleted && styles.completedText]}
+                      >
+                        {meeting.title}
+                      </Text>
+                      <Text style={styles.dateTime}>
+                        📅 {meeting.date} • ⏰ {meeting.time} WIB
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardBody}>
+                    <View style={styles.locationBadge}>
+                      <Text style={styles.locationText}>📍 {meeting.location}</Text>
+                    </View>
+
+                    {meeting.notes ? (
+                      <Text style={styles.notesText}>{meeting.notes}</Text>
+                    ) : null}
+                  </View>
+
+                  <View style={styles.cardFooter}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setSelectedMeeting(meeting);
+                        setShowMeetingModal(true);
+                      }}
+                    >
+                      <Text style={styles.editBtn}>✏️ Edit</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity onPress={() => handleDeleteMeeting(meeting.id)}>
+                      <Text style={styles.deleteBtn}>🗑️ Hapus</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyIcon}>📌</Text>
+                <Text style={styles.emptyTitle}>Belum Ada Meeting</Text>
+                <Text style={styles.emptySubtitle}>
+                  Jadwalkan janji pertemuan atau rapat dengan tombol (+).
+                </Text>
+              </View>
+            )
           )}
         </View>
 
@@ -177,18 +334,30 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({
       <TouchableOpacity
         style={styles.fab}
         onPress={() => {
-          setSelectedMeeting(undefined);
-          setShowModal(true);
+          if (section === 'tasks') {
+            setSelectedTask(undefined);
+            setShowTaskModal(true);
+          } else {
+            setSelectedMeeting(undefined);
+            setShowMeetingModal(true);
+          }
         }}
         activeOpacity={0.8}
       >
         <Text style={styles.fabIcon}>+</Text>
       </TouchableOpacity>
 
+      <TaskModal
+        visible={showTaskModal}
+        initialData={selectedTask}
+        onClose={() => setShowTaskModal(false)}
+        onSave={handleSaveTask}
+      />
+
       <MeetingModal
-        visible={showModal}
+        visible={showMeetingModal}
         initialData={selectedMeeting}
-        onClose={() => setShowModal(false)}
+        onClose={() => setShowMeetingModal(false)}
         onSave={handleSaveMeeting}
       />
     </SafeAreaView>
@@ -199,6 +368,31 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    gap: 8,
+  },
+  sectionBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  activeSectionBtn: {
+    borderBottomColor: COLORS.primary,
+  },
+  sectionBtnText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: COLORS.textMuted,
+  },
+  activeSectionBtnText: {
+    color: COLORS.primary,
   },
   filterContainer: {
     flexDirection: 'row',
@@ -211,8 +405,8 @@ const styles = StyleSheet.create({
   },
   filterTab: {
     flex: 1,
-    paddingVertical: 7,
-    borderRadius: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
     alignItems: 'center',
     backgroundColor: COLORS.background,
   },
@@ -220,7 +414,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
   },
   filterText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: COLORS.textMuted,
   },
@@ -248,7 +442,7 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
   },
   completedCard: {
-    opacity: 0.65,
+    opacity: 0.6,
     backgroundColor: '#FAFAFA',
   },
   cardHeader: {
@@ -282,6 +476,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: COLORS.textDark,
   },
+  subjectBadge: {
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: '600',
+    marginTop: 2,
+  },
   completedText: {
     textDecorationLine: 'line-through',
     color: COLORS.textMuted,
@@ -289,12 +489,38 @@ const styles = StyleSheet.create({
   dateTime: {
     fontSize: 12,
     color: COLORS.textMuted,
-    marginTop: 2,
+    marginTop: 3,
     fontWeight: '500',
   },
   cardBody: {
     marginTop: 10,
     paddingLeft: 36,
+    gap: 6,
+  },
+  fileBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.primaryBadge,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  fileIcon: {
+    fontSize: 14,
+  },
+  fileNameText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+    flex: 1,
+  },
+  fileOpenHint: {
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: 'bold',
   },
   locationBadge: {
     backgroundColor: COLORS.primaryLight,
@@ -302,7 +528,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   locationText: {
     fontSize: 11,

@@ -10,6 +10,9 @@ export interface ParsedQuery {
     | 'ASK_UNIFORM'
     | 'ADD_MEETING'
     | 'LIST_MEETINGS'
+    | 'ADD_TASK'
+    | 'LIST_TASKS'
+    | 'LEARN_DOCUMENT'
     | 'OVERRIDE_SCHEDULE'
     | 'SEARCH_SUBJECT'
     | 'CLEAR_CHAT'
@@ -22,6 +25,12 @@ export interface ParsedQuery {
     date: string;
     time: string;
     location: string;
+  };
+  taskDetails?: {
+    title: string;
+    subject: string;
+    deadlineDate: string;
+    deadlineTime: string;
   };
   overrideDetails?: {
     day?: DayName;
@@ -49,7 +58,70 @@ export function parseUserQuery(input: string): ParsedQuery {
     return { intent: 'CLEAR_CHAT' };
   }
 
-  // 4. Current Room / Subject Right Now
+  // 4. Learn Document / Upload file
+  if (/\b(upload file|belajar file|tambah materi|unggah dokumen|baca file|upload tugas)\b/i.test(clean)) {
+    return { intent: 'LEARN_DOCUMENT' };
+  }
+
+  // 5. Add Task / Homework Assignment
+  if (/\b(tambah tugas|buat tugas|ingatkan tugas|catat tugas|ada pr|tambah pr)\b/i.test(clean)) {
+    let deadlineDate = new Date().toISOString().split('T')[0];
+    if (/\bbesok\b/i.test(clean)) {
+      const tom = new Date();
+      tom.setDate(tom.getDate() + 1);
+      deadlineDate = tom.toISOString().split('T')[0];
+    } else if (/\blusa\b/i.test(clean)) {
+      const lusa = new Date();
+      lusa.setDate(lusa.getDate() + 2);
+      deadlineDate = lusa.toISOString().split('T')[0];
+    }
+
+    let deadlineTime = '23:59';
+    const timeMatch = clean.match(/(?:jam|pukul)?\s*(\d{1,2})[.:](\d{2})/i) || clean.match(/(?:jam|pukul)\s*(\d{1,2})/i);
+    if (timeMatch) {
+      if (timeMatch[2]) {
+        deadlineTime = `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`;
+      } else {
+        deadlineTime = `${timeMatch[1].padStart(2, '0')}:00`;
+      }
+    }
+
+    let subject = 'Umum';
+    const subjMap: { [k: string]: string } = {
+      mtk: 'Matematika (MTK-4)',
+      matematika: 'Matematika (MTK-4)',
+      inggris: 'Bahasa Inggris (ING-1)',
+      indonesia: 'Bahasa Indonesia (INA-4)',
+      agama: 'PAI-3',
+      kejuruan: 'Kejuruan',
+      rpl: 'Konsentrasi Kejuruan (MP1-C)',
+      pplg: 'PPLG',
+    };
+
+    for (const [k, v] of Object.entries(subjMap)) {
+      if (clean.includes(k)) {
+        subject = v;
+        break;
+      }
+    }
+
+    return {
+      intent: 'ADD_TASK',
+      taskDetails: {
+        title: 'Tugas Baru',
+        subject,
+        deadlineDate,
+        deadlineTime,
+      },
+    };
+  }
+
+  // 6. List Tasks / Check assignments
+  if (/\b(daftar tugas|cek tugas|ada tugas apa|tugas saya|pr apa|deadline tugas|tugas belum selesai)\b/i.test(clean)) {
+    return { intent: 'LIST_TASKS' };
+  }
+
+  // 7. Current Room / Subject Right Now
   if (
     /\b(ruang(an)? sekarang|sekarang di mana|mapel sekarang|jam ini apa|sekarang belajar apa|kelas sekarang)\b/i.test(clean) ||
     (/\bsekarang\b/i.test(clean) && /\b(ruang|mapel|kelas|pelajaran)\b/i.test(clean))
@@ -57,7 +129,7 @@ export function parseUserQuery(input: string): ParsedQuery {
     return { intent: 'ASK_CURRENT_ROOM' };
   }
 
-  // 5. Uniforms
+  // 8. Uniforms
   if (/\b(seragam|baju|pakaian|dresscode|kostum)\b/i.test(clean)) {
     let day: DayName | undefined;
     if (/\bbesok\b/i.test(clean)) {
@@ -77,12 +149,10 @@ export function parseUserQuery(input: string): ParsedQuery {
     return { intent: 'ASK_UNIFORM', targetDay: day };
   }
 
-  // 6. Add Meeting / Appointment
-  // Examples: "ingatkan meeting osis besok jam 14.00 di aula", "tambah meeting projek hari rabu jam 10:00 di sentra"
+  // 9. Add Meeting / Appointment
   if (/\b(tambah|buat|ingatkan|jadwalkan|catat)\b.*\b(meeting|janji|agenda|rapat|temu|diskusi)\b/i.test(clean) ||
       /\b(meeting|janji|agenda|rapat)\b.*\b(jam|pukul)\b/i.test(clean)) {
     
-    // Extract time (e.g. 14:00, 14.00, jam 2, pukul 10)
     let time = '09:00';
     const timeMatch = clean.match(/(?:jam|pukul)?\s*(\d{1,2})[.:](\d{2})/i) || clean.match(/(?:jam|pukul)\s*(\d{1,2})/i);
     if (timeMatch) {
@@ -93,7 +163,6 @@ export function parseUserQuery(input: string): ParsedQuery {
       }
     }
 
-    // Extract date/day
     let dateStr = new Date().toISOString().split('T')[0];
     if (/\bbesok\b/i.test(clean)) {
       const tom = new Date();
@@ -105,14 +174,12 @@ export function parseUserQuery(input: string): ParsedQuery {
       dateStr = lusa.toISOString().split('T')[0];
     }
 
-    // Extract location
     let location = 'Sekolah';
     const locMatch = clean.match(/\bdi\s+([a-zA-Z0-9.\s]+?)(?:\s+(?:jam|pukul|pada|tanggal)|$)/i);
     if (locMatch) {
       location = locMatch[1].trim();
     }
 
-    // Extract title
     let title = 'Meeting / Agenda';
     const titleMatch = clean.match(/(?:meeting|janji|agenda|rapat|temu)\s+([a-zA-Z0-9\s]+?)(?:\s+(?:besok|lusa|hari|jam|pukul|di)|$)/i);
     if (titleMatch && titleMatch[1]) {
@@ -130,12 +197,12 @@ export function parseUserQuery(input: string): ParsedQuery {
     };
   }
 
-  // 7. List Meetings / Agendas
+  // 10. List Meetings
   if (/\b(daftar meeting|jadwal meeting|agenda saya|ada meeting apa|cek meeting|rapat apa|jadwal janji)\b/i.test(clean)) {
     return { intent: 'LIST_MEETINGS' };
   }
 
-  // 8. Override / Change Schedule
+  // 11. Override Schedule
   if (/\b(ubah|ganti|update|override|revisi)\b.*\b(jadwal|ruangan|mapel|jam)\b/i.test(clean)) {
     let day: DayName = 'senin';
     const days: DayName[] = ['senin', 'selasa', 'rabu', 'kamis', 'jumat'];
@@ -161,13 +228,13 @@ export function parseUserQuery(input: string): ParsedQuery {
     };
   }
 
-  // 9. Ask Schedule: Tomorrow
+  // 12. Ask Schedule: Tomorrow
   if (/\b(jadwal besok|besok mapel apa|besok belajar apa|besok ada apa|pelajaran besok)\b/i.test(clean) ||
       (/\bbesok\b/i.test(clean) && /\b(jadwal|mapel|pelajaran|ruang)\b/i.test(clean))) {
     return { intent: 'ASK_SCHEDULE_TOMORROW' };
   }
 
-  // 10. Ask Schedule: Specific Day (Senin..Jumat)
+  // 13. Ask Schedule: Specific Day
   const daysMap: { [k: string]: DayName } = {
     senin: 'senin',
     selasa: 'selasa',
@@ -185,14 +252,14 @@ export function parseUserQuery(input: string): ParsedQuery {
     }
   }
 
-  // 11. Ask Schedule: Today (Default when asking about schedule)
+  // 14. Ask Schedule: Today
   if (/\b(jadwal hari ini|hari ini mapel apa|hari ini belajar apa|jadwal sekarang|jadwalnya apa)\b/i.test(clean) ||
       (/\bhari ini\b/i.test(clean) && /\b(jadwal|mapel|pelajaran|kelas)\b/i.test(clean)) ||
       clean === 'jadwal') {
     return { intent: 'ASK_SCHEDULE_TODAY' };
   }
 
-  // 12. Search specific subject (e.g. "kapan mtk", "jadwal bahasa inggris")
+  // 15. Search specific subject
   const knownSubjects = ['mtk', 'matematika', 'ing', 'inggris', 'ina', 'indonesia', 'pai', 'agama', 'bk', 'bjw', 'jawa', 'ppc', 'pancasila', 'mp1', 'mk1', 'mk2', 'mk3', 'mk4', 'kik'];
   for (const sub of knownSubjects) {
     if (clean.includes(sub)) {

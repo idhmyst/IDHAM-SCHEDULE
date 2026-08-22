@@ -10,16 +10,21 @@ import {
   Platform,
   SafeAreaView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { COLORS } from '../constants/theme';
-import { ChatMessage, MeetingAgenda, ScheduleOverride } from '../types';
+import { ChatMessage, KnowledgeDocument, MeetingAgenda, ScheduleOverride, TaskAssignment } from '../types';
 import { ChatBubble } from '../components/ChatBubble';
 import { QuickChips } from '../components/QuickChips';
 import { Header } from '../components/Header';
 import { MeetingModal } from '../components/MeetingModal';
+import { TaskModal } from '../components/TaskModal';
+import { KnowledgeModal } from '../components/KnowledgeModal';
 import { OverrideModal } from '../components/OverrideModal';
 import { generateBotResponse } from '../bot/responseFormatter';
+import { KnowledgeService } from '../services/knowledgeService';
 import { StorageService } from '../services/storage';
+import { NotificationService } from '../services/notificationService';
 
 interface ChatScreenProps {
   currentClass: string;
@@ -30,7 +35,11 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+
   const [showMeetingModal, setShowMeetingModal] = useState(false);
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [taskModalData, setTaskModalData] = useState<any>(null);
+  const [showKnowledgeModal, setShowKnowledgeModal] = useState(false);
   const [showOverrideModal, setShowOverrideModal] = useState(false);
   const [overrideModalData, setOverrideModalData] = useState<any>(null);
 
@@ -45,13 +54,12 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
     if (saved && saved.length > 0) {
       setMessages(saved);
     } else {
-      // Initial Welcome Message
       const welcomeMsg: ChatMessage = {
         id: '1',
         sender: 'bot',
-        text: `Halo Idham! 👋\n\nSaya asisten jadwal offline Anda untuk kelas **${currentClass}** (SMK Telkom Purwokerto).\n\nAnda bisa bertanya jadwal ruangan, mata pelajaran hari Senin-Jumat, seragam harian, hingga mencatat janji meeting dan agenda Anda di sini.`,
+        text: `Halo Idham! 👋\n\nSaya asisten jadwal & tugas offline untuk kelas **${currentClass}** (SMK Telkom Purwokerto).\n\n• Tanyakan jadwal kelas & ruangan.\n• Catat tugas sekolah dan lampirkan filenya.\n• Upload file materi/catatan dengan tombol 📎 agar saya pelajari dan bisa menjawab pertanyaan Anda!`,
         timestamp: formatCurrentTime(),
-        quickReplies: ['📅 Jadwal Hari Ini', '📍 Ruangan Sekarang', '👕 Seragam Hari Ini', '📋 Jadwal Besok'],
+        quickReplies: ['📅 Jadwal Hari Ini', '📝 Daftar Tugas', '📍 Ruangan Sekarang', '📎 Upload File Belajar'],
       };
       setMessages([welcomeMsg]);
       await StorageService.saveChats([welcomeMsg]);
@@ -83,7 +91,6 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
 
-    // Generate Bot Response
     try {
       const botRes = await generateBotResponse(text, currentClass);
 
@@ -102,6 +109,11 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
 
       if (botRes.openModal === 'meeting') {
         setShowMeetingModal(true);
+      } else if (botRes.openModal === 'task') {
+        setTaskModalData(botRes.modalData);
+        setShowTaskModal(true);
+      } else if (botRes.openModal === 'knowledge') {
+        setShowKnowledgeModal(true);
       } else if (botRes.openModal === 'override') {
         setOverrideModalData(botRes.modalData);
         setShowOverrideModal(true);
@@ -118,12 +130,44 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
 
   const handleSaveMeeting = async (meeting: MeetingAgenda) => {
     await StorageService.saveMeeting(meeting);
+    await NotificationService.scheduleAllReminders();
     const confirmMsg: ChatMessage = {
       id: Date.now().toString(),
       sender: 'bot',
-      text: `✅ **Agenda Meeting Tersimpan!**\n\n📌 **${meeting.title}**\n📅 ${meeting.date} pukul ${meeting.time} WIB\n📍 Lokasi: ${meeting.location}`,
+      text: `✅ **Agenda Meeting Tersimpan!**\n\n📌 **${meeting.title}**\n📅 ${meeting.date} pukul ${meeting.time} WIB\n📍 Lokasi: ${meeting.location}\n\nPengingat telah aktif!`,
       timestamp: formatCurrentTime(),
-      quickReplies: ['📋 Lihat Semua Meeting', '📅 Jadwal Hari Ini'],
+      quickReplies: ['📋 Lihat Semua Agenda', '📅 Jadwal Hari Ini'],
+    };
+    const updated = [...messages, confirmMsg];
+    setMessages(updated);
+    await StorageService.saveChats(updated);
+  };
+
+  const handleSaveTask = async (task: TaskAssignment) => {
+    await StorageService.saveTask(task);
+    await NotificationService.scheduleAllReminders();
+    const fileText = task.attachedFileName ? `\n📎 File Lampiran: *${task.attachedFileName}*` : '';
+    const confirmMsg: ChatMessage = {
+      id: Date.now().toString(),
+      sender: 'bot',
+      text: `✅ **Tugas Berhasil Disimpan & Pengingat Aktif!**\n\n📝 **${task.title}** (${task.subject})\n⏰ Deadline: **${task.deadlineDate} pukul ${task.deadlineTime} WIB**` +
+        fileText +
+        `\n\nAnda akan diingatkan sebelum batas waktu pengumpulan tugas tiba.`,
+      timestamp: formatCurrentTime(),
+      quickReplies: ['📝 Lihat Semua Tugas', '📅 Jadwal Hari Ini'],
+    };
+    const updated = [...messages, confirmMsg];
+    setMessages(updated);
+    await StorageService.saveChats(updated);
+  };
+
+  const handleLearnedDocument = async (doc: KnowledgeDocument) => {
+    const confirmMsg: ChatMessage = {
+      id: Date.now().toString(),
+      sender: 'bot',
+      text: `🧠 **Materi Baru Berhasil Dipelajari!**\n\n📄 **${doc.title}**\n*Sumber: ${doc.fileName}*\n\nSekarang Anda dapat menanyakan materi atau isi dari dokumen ini kapan saja!`,
+      timestamp: formatCurrentTime(),
+      quickReplies: [`Tanya tentang ${doc.title}`, '📝 Daftar Tugas', '📅 Jadwal Hari Ini'],
     };
     const updated = [...messages, confirmMsg];
     setMessages(updated);
@@ -132,10 +176,11 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
 
   const handleSaveOverride = async (override: ScheduleOverride) => {
     await StorageService.saveOverride(override);
+    await NotificationService.scheduleAllReminders();
     const confirmMsg: ChatMessage = {
       id: Date.now().toString(),
       sender: 'bot',
-      text: `✅ **Jadwal Berhasil Diperbarui!**\n\n📅 Hari: **${override.day.toUpperCase()}** (Jam ke-${override.period})\n🏫 Ruangan: **${override.newRoom || 'Sesuai'}**\n📖 Mapel: **${override.newSubjectName || override.newSubjectCode || 'Sesuai'}**\nℹ️ Catatan: *${override.note}*`,
+      text: `✅ **Jadwal Berhasil Diperbarui!**\n\n📅 Hari: **${override.day.toUpperCase()}** (Jam ke-${override.period})\n🏫 Ruangan: **${override.newRoom || 'Sesuai'}**\n📖 Mapel: **${override.newSubjectName || override.newSubjectCode || 'Sesuai'}**`,
       timestamp: formatCurrentTime(),
       quickReplies: [`📅 Cek Jadwal ${override.day}`, '📍 Ruangan Sekarang'],
     };
@@ -148,7 +193,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
     <SafeAreaView style={styles.container}>
       <Header
         title="IDHAM SCHEDULE"
-        subtitle="Offline Bot"
+        subtitle="Offline AI Assistant"
         currentClass={currentClass}
         onClassPress={onOpenSettings}
       />
@@ -176,16 +221,25 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
         {isTyping && (
           <View style={styles.typingContainer}>
             <ActivityIndicator size="small" color={COLORS.primary} />
-            <Text style={styles.typingText}>Bot sedang memproses...</Text>
+            <Text style={styles.typingText}>Bot sedang memproses materi...</Text>
           </View>
         )}
 
         <QuickChips onSelect={chip => handleSendMessage(chip)} />
 
         <View style={styles.inputBar}>
+          {/* File Upload Button to Teach Bot */}
+          <TouchableOpacity
+            style={styles.attachBtn}
+            onPress={() => setShowKnowledgeModal(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.attachIcon}>📎</Text>
+          </TouchableOpacity>
+
           <TextInput
             style={styles.textInput}
-            placeholder="Ketik pertanyaan / perintah jadwal..."
+            placeholder="Tanya jadwal, tugas, atau materi..."
             placeholderTextColor={COLORS.textLight}
             value={inputText}
             onChangeText={setInputText}
@@ -203,6 +257,19 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ currentClass, onOpenSett
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      <KnowledgeModal
+        visible={showKnowledgeModal}
+        onClose={() => setShowKnowledgeModal(false)}
+        onLearned={handleLearnedDocument}
+      />
+
+      <TaskModal
+        visible={showTaskModal}
+        initialData={taskModalData}
+        onClose={() => setShowTaskModal(false)}
+        onSave={handleSaveTask}
+      />
 
       <MeetingModal
         visible={showMeetingModal}
@@ -247,12 +314,25 @@ const styles = StyleSheet.create({
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 10,
     backgroundColor: COLORS.white,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
     gap: 8,
+  },
+  attachBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.primaryBadge,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  attachIcon: {
+    fontSize: 18,
   },
   textInput: {
     flex: 1,
@@ -266,9 +346,9 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
