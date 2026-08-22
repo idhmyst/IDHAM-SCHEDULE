@@ -288,6 +288,10 @@ export const AttendanceService = {
     return [];
   },
 
+  async saveAllHistory(history: AttendanceRecord[]): Promise<void> {
+    await AsyncStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
+  },
+
   // Login API Call
   async loginStudent(usernameOrNis: string, password: string): Promise<{ success: boolean; data?: StudentAuth; message?: string }> {
     try {

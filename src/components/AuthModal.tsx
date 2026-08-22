@@ -6,11 +6,11 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
+  ActivityIndicator,
+  Alert,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { CloudSyncService, UserProfile } from '../services/cloudSync';
@@ -21,103 +21,163 @@ interface AuthModalProps {
   onClose: () => void;
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({
-  visible,
-  onClose,
-}) => {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose }) => {
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [authMethod, setAuthMethod] = useState<'otp' | 'password'>('otp');
+  const [otpStep, setOtpStep] = useState<'send' | 'verify'>('send');
+
+  // Form states
   const [email, setEmail] = useState('');
+  const [otpToken, setOtpToken] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
+  const [fullName, setFullName] = useState('Idham Baihaqi');
   const [className, setClassName] = useState('XII PPLG 3');
+  const [isRegisterMode, setIsRegisterMode] = useState(false);
+
   const [loading, setLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [exportingExcel, setExportingExcel] = useState(false);
-  const [lastSync, setLastSync] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(0);
 
   useEffect(() => {
     if (visible) {
-      loadProfile();
+      loadProfileAndStatus();
     }
   }, [visible]);
 
-  const loadProfile = async () => {
-    const p = await CloudSyncService.getLocalProfile();
-    const ls = await CloudSyncService.getLastSyncTime();
-    setProfile(p);
-    setLastSync(ls);
+  useEffect(() => {
+    let timer: any;
+    if (countdown > 0) {
+      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [countdown]);
+
+  const loadProfileAndStatus = async () => {
+    const user = await CloudSyncService.getCurrentUser();
+    setCurrentUser(user);
+    const syncTime = await CloudSyncService.getLastSyncTime();
+    if (syncTime) {
+      const d = new Date(syncTime);
+      setLastSyncTime(
+        `${d.toLocaleDateString('id-ID')} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')} WIB`
+      );
+    }
   };
 
-  const handleAuth = async () => {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert('Data Belum Lengkap', 'Masukkan Email dan Password.');
+  // 1. Kirim Kode OTP Asli ke Email
+  const handleSendOtp = async () => {
+    if (!email.trim() || !email.includes('@')) {
+      Alert.alert('Email Tidak Valid', 'Masukkan alamat email asli Anda.');
       return;
     }
 
     setLoading(true);
-    if (mode === 'register') {
-      if (!fullName.trim()) {
-        Alert.alert('Nama Diperlukan', 'Masukkan Nama Lengkap Anda.');
-        setLoading(false);
-        return;
-      }
-      const res = await CloudSyncService.signUp(email, password, fullName, className);
-      setLoading(false);
-      if (res.success && res.user) {
-        setProfile(res.user);
-        Alert.alert('Akun Berhasil Dibuat! ☁️', `Selamat datang, ${res.user.fullName}! Data Anda otomatis disinkronkan ke Supabase.`);
-      } else {
-        Alert.alert('Gagal Daftar', res.message || 'Periksa kembali data Anda.');
-      }
+    setSyncStatus(null);
+    const res = await CloudSyncService.sendEmailOtp(email.trim());
+    setLoading(false);
+
+    if (res.success) {
+      setOtpStep('verify');
+      setCountdown(60);
+      Alert.alert('Kode OTP Terkirim! 📬', res.message);
     } else {
-      const res = await CloudSyncService.signIn(email, password);
-      setLoading(false);
-      if (res.success && res.user) {
-        setProfile(res.user);
-        Alert.alert('Login Berhasil! 🎓', `Selamat datang kembali, ${res.user.fullName}! Data Anda telah dipulihkan dari Supabase.`);
-      } else {
-        Alert.alert('Gagal Masuk', res.message || 'Periksa kembali email dan password Anda.');
-      }
+      Alert.alert('Gagal Mengirim OTP', res.message || 'Periksa koneksi internet Anda.');
     }
   };
 
-  const handleSyncUp = async () => {
-    if (!profile) return;
-    setSyncing(true);
-    const res = await CloudSyncService.syncToCloud(profile.id);
-    setSyncing(false);
-    const ls = await CloudSyncService.getLastSyncTime();
-    setLastSync(ls);
-    Alert.alert('Sinkronisasi Cloud', res.message);
+  // 2. Verifikasi Kode OTP 6-Digit
+  const handleVerifyOtp = async () => {
+    if (!otpToken.trim() || otpToken.trim().length < 6) {
+      Alert.alert('Kode OTP Belum Lengkap', 'Masukkan 6-digit kode OTP yang dikirim ke email.');
+      return;
+    }
+
+    setLoading(true);
+    setSyncStatus(null);
+    const res = await CloudSyncService.verifyEmailOtp(
+      email.trim(),
+      otpToken.trim(),
+      fullName.trim(),
+      className.trim()
+    );
+    setLoading(false);
+
+    if (res.success && res.user) {
+      setCurrentUser(res.user);
+      Alert.alert('Login Berhasil! 🎉', `Selamat datang kembali, ${res.user.fullName}! Data Anda aman tersimpan.`);
+      loadProfileAndStatus();
+    } else {
+      Alert.alert('Verifikasi Gagal', res.message || 'Kode OTP tidak cocok.');
+    }
   };
 
-  const handleSyncDown = async () => {
-    if (!profile) return;
-    setSyncing(true);
-    const res = await CloudSyncService.syncFromCloud(profile.id);
-    setSyncing(false);
-    const ls = await CloudSyncService.getLastSyncTime();
-    setLastSync(ls);
-    Alert.alert('Pemulihan Data Cloud', res.message);
+  // 3. Password Fallback
+  const handlePasswordSubmit = async () => {
+    if (!email.trim() || !password.trim()) {
+      Alert.alert('Form Belum Lengkap', 'Masukkan email dan kata sandi.');
+      return;
+    }
+
+    setLoading(true);
+    setSyncStatus(null);
+
+    let res;
+    if (isRegisterMode) {
+      res = await CloudSyncService.signUp(email, password, fullName, className);
+    } else {
+      res = await CloudSyncService.signIn(email, password);
+    }
+    setLoading(false);
+
+    if (res.success && res.user) {
+      setCurrentUser(res.user);
+      Alert.alert('Berhasil! 🎉', isRegisterMode ? 'Akun Supabase berhasil dibuat!' : 'Berhasil masuk ke akun cloud!');
+      loadProfileAndStatus();
+    } else {
+      Alert.alert('Gagal Autentikasi', res.message || 'Terjadi kesalahan.');
+    }
+  };
+
+  const handleManualBackup = async () => {
+    if (!currentUser) return;
+    setLoading(true);
+    setSyncStatus('Sedang mencadangkan seluruh data ke Supabase...');
+    const res = await CloudSyncService.syncToCloud(currentUser.id);
+    setLoading(false);
+    setSyncStatus(res.message || null);
+    loadProfileAndStatus();
+  };
+
+  const handleManualRestore = async () => {
+    if (!currentUser) return;
+    setLoading(true);
+    setSyncStatus('Sedang memulihkan data dari Supabase Cloud...');
+    const res = await CloudSyncService.syncFromCloud(currentUser.id);
+    setLoading(false);
+    setSyncStatus(res.message || null);
+    loadProfileAndStatus();
   };
 
   const handleExportExcel = async () => {
-    setExportingExcel(true);
-    await ReportService.exportAndShareExcel();
-    setExportingExcel(false);
+    try {
+      await ReportService.exportAndShareExcel();
+    } catch (e) {
+      Alert.alert('Gagal Ekspor', 'Tidak dapat membuat berkas Excel.');
+    }
   };
 
   const handleLogout = async () => {
-    Alert.alert('Keluar Akun', 'Yakin ingin keluar dari akun Cloud Supabase ini?', [
+    Alert.alert('Konfirmasi Logout', 'Apakah Anda yakin ingin keluar dari akun ini?', [
       { text: 'Batal', style: 'cancel' },
       {
         text: 'Keluar',
         style: 'destructive',
         onPress: async () => {
           await CloudSyncService.signOut();
-          setProfile(null);
-          setEmail('');
+          setCurrentUser(null);
+          setOtpStep('send');
+          setOtpToken('');
           setPassword('');
         },
       },
@@ -131,206 +191,269 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         style={styles.overlay}
       >
         <View style={styles.content}>
-          {/* Header */}
           <View style={styles.header}>
-            <View style={styles.headerTitleRow}>
+            <View style={styles.headerTitleBox}>
               <Text style={styles.headerIcon}>☁️</Text>
               <View>
-                <Text style={styles.headerTitle}>Akun Cloud & Database Supabase</Text>
-                <Text style={styles.headerSub}>
-                  {profile ? `Terhubung: ${profile.fullName}` : 'Simpan Data Agar Tidak Hilang'}
-                </Text>
+                <Text style={styles.headerTitle}>Database Cloud & Akun</Text>
+                <Text style={styles.headerSub}>Supabase Real-Time Backup</Text>
               </View>
             </View>
             <TouchableOpacity onPress={onClose}>
-              <Text style={styles.closeText}>✕</Text>
+              <Text style={styles.closeBtn}>✕</Text>
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
-            {profile ? (
-              <View style={styles.profileSection}>
-                {/* Profile Card */}
-                <View style={styles.profileCard}>
-                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>🎓</Text>
+            {currentUser ? (
+              // User is Logged In
+              <View style={styles.loggedInBox}>
+                <View style={styles.userCard}>
+                  <View style={styles.avatarBox}>
+                    <Text style={styles.avatarText}>
+                      {currentUser.fullName ? currentUser.fullName.charAt(0).toUpperCase() : 'U'}
+                    </Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.profileName}>{profile.fullName}</Text>
-                    <Text style={styles.profileEmail}>{profile.email}</Text>
-                    <Text style={styles.profileClass}>Kelas: {profile.className}</Text>
+                    <Text style={styles.userName}>{currentUser.fullName}</Text>
+                    <Text style={styles.userEmail}>{currentUser.email}</Text>
+                    <View style={styles.classBadge}>
+                      <Text style={styles.classBadgeText}>Kelas: {currentUser.className}</Text>
+                    </View>
                   </View>
-                  <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
-                    <Text style={styles.logoutText}>Keluar</Text>
-                  </TouchableOpacity>
                 </View>
 
-                {/* Cloud Sync Status */}
-                <View style={styles.syncStatusBox}>
-                  <Text style={styles.syncStatusTitle}>🟢 Status Database: Terhubung</Text>
-                  <Text style={styles.syncStatusSub}>
-                    Semua jadwal, meeting, tugas, presensi, dan berkas AI tersimpan aman di database cloud Supabase.
-                  </Text>
-                  {lastSync && (
-                    <Text style={styles.lastSyncText}>
-                      Terakhir Sinkron: <strong>{lastSync}</strong>
-                    </Text>
-                  )}
-                </View>
-
-                {/* Sync & Export Action Buttons */}
-                <View style={styles.syncActions}>
-                  <TouchableOpacity
-                    style={styles.syncBtn}
-                    onPress={handleSyncUp}
-                    disabled={syncing}
-                    activeOpacity={0.8}
-                  >
-                    {syncing ? (
-                      <ActivityIndicator size="small" color={COLORS.white} />
-                    ) : (
-                      <>
-                        <Text style={styles.syncBtnIcon}>⬆️</Text>
-                        <Text style={styles.syncBtnText}>Backup ke Cloud Sekarang</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.restoreBtn}
-                    onPress={handleSyncDown}
-                    disabled={syncing}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.restoreBtnIcon}>📥</Text>
-                    <Text style={styles.restoreBtnText}>Pulihkan Data Dari Cloud</Text>
-                  </TouchableOpacity>
-
-                  {/* Excel Download Button */}
-                  <TouchableOpacity
-                    style={styles.excelBtn}
-                    onPress={handleExportExcel}
-                    disabled={exportingExcel}
-                    activeOpacity={0.8}
-                  >
-                    {exportingExcel ? (
-                      <ActivityIndicator size="small" color={COLORS.white} />
-                    ) : (
-                      <>
-                        <Text style={styles.excelBtnIcon}>📗</Text>
-                        <Text style={styles.excelBtnText}>
-                          Unduh Rekap Seluruh Inputan (.Excel / .CSV)
-                        </Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : (
-              <View style={styles.authForm}>
-                {/* Mode Switcher */}
-                <View style={styles.authModeSwitch}>
-                  <TouchableOpacity
-                    style={[styles.authModeBtn, mode === 'login' && styles.activeAuthModeBtn]}
-                    onPress={() => setMode('login')}
-                  >
-                    <Text
-                      style={[
-                        styles.authModeText,
-                        mode === 'login' && styles.activeAuthModeText,
-                      ]}
-                    >
-                      Masuk (Login)
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.authModeBtn, mode === 'register' && styles.activeAuthModeBtn]}
-                    onPress={() => setMode('register')}
-                  >
-                    <Text
-                      style={[
-                        styles.authModeText,
-                        mode === 'register' && styles.activeAuthModeText,
-                      ]}
-                    >
-                      Daftar Akun Baru
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                <Text style={styles.formDesc}>
-                  {mode === 'login'
-                    ? 'Masuk untuk memulihkan jadwal, tugas, dan presensi Anda dari Supabase.'
-                    : 'Buat akun untuk menyimpan seluruh jadwal, presensi, dan berkas materi Anda di cloud.'}
-                </Text>
-
-                {mode === 'register' && (
-                  <>
-                    <Text style={styles.label}>Nama Lengkap *</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="cth: Idham Baihaqi"
-                      placeholderTextColor={COLORS.textLight}
-                      value={fullName}
-                      onChangeText={setFullName}
-                    />
-
-                    <Text style={styles.label}>Kelas</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="XII PPLG 3"
-                      placeholderTextColor={COLORS.textLight}
-                      value={className}
-                      onChangeText={setClassName}
-                    />
-                  </>
+                {lastSyncTime && (
+                  <Text style={styles.lastSyncText}>Terakhir disinkronkan: {lastSyncTime}</Text>
                 )}
 
-                <Text style={styles.label}>Email *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="contoh@gmail.com"
-                  placeholderTextColor={COLORS.textLight}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  value={email}
-                  onChangeText={setEmail}
-                />
+                {syncStatus && (
+                  <View style={styles.statusBox}>
+                    <Text style={styles.statusBoxText}>✓ {syncStatus}</Text>
+                  </View>
+                )}
 
-                <Text style={styles.label}>Kata Sandi *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Minimal 6 karakter"
-                  placeholderTextColor={COLORS.textLight}
-                  secureTextEntry
-                  value={password}
-                  onChangeText={setPassword}
-                />
+                {/* Cloud Actions */}
+                <View style={styles.actionGrid}>
+                  <TouchableOpacity
+                    style={styles.actionBtnPrimary}
+                    onPress={handleManualBackup}
+                    disabled={loading}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.actionBtnIcon}>⬆️</Text>
+                    <Text style={styles.actionBtnText}>Backup ke Cloud</Text>
+                  </TouchableOpacity>
 
+                  <TouchableOpacity
+                    style={styles.actionBtnSecondary}
+                    onPress={handleManualRestore}
+                    disabled={loading}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.actionBtnIcon}>⬇️</Text>
+                    <Text style={styles.actionBtnText}>Restore Data</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Export Excel Button */}
                 <TouchableOpacity
-                  style={styles.submitAuthBtn}
-                  onPress={handleAuth}
-                  disabled={loading}
+                  style={styles.excelBtn}
+                  onPress={handleExportExcel}
                   activeOpacity={0.8}
                 >
-                  {loading ? (
-                    <ActivityIndicator color={COLORS.white} />
-                  ) : (
-                    <Text style={styles.submitAuthText}>
-                      {mode === 'login' ? 'Masuk & Sinkronkan Data' : 'Daftar & Hubungkan ke Cloud'}
-                    </Text>
-                  )}
+                  <Text style={styles.excelBtnIcon}>📗</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.excelBtnTitle}>Unduh Rekap Aktivitas Excel</Text>
+                    <Text style={styles.excelBtnSub}>Format .csv komplit (Tugas, Absen GPS & QR, Jadwal)</Text>
+                  </View>
+                  <Text style={styles.excelBtnArrow}>Unduh ➔</Text>
                 </TouchableOpacity>
+
+                {loading && <ActivityIndicator size="small" color={COLORS.primary} style={{ marginVertical: 10 }} />}
+
+                <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
+                  <Text style={styles.logoutText}>🚪 Keluar Akun (Logout)</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              // Auth Form (OTP or Password)
+              <View style={styles.formContainer}>
+                {/* Method Switcher */}
+                <View style={styles.methodRow}>
+                  <TouchableOpacity
+                    style={[styles.methodTab, authMethod === 'otp' && styles.activeMethodTab]}
+                    onPress={() => setAuthMethod('otp')}
+                  >
+                    <Text style={[styles.methodTabText, authMethod === 'otp' && styles.activeMethodTabText]}>
+                      📧 Email Asli & OTP
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.methodTab, authMethod === 'password' && styles.activeMethodTab]}
+                    onPress={() => setAuthMethod('password')}
+                  >
+                    <Text style={[styles.methodTabText, authMethod === 'password' && styles.activeMethodTabText]}>
+                      🔑 Password
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {authMethod === 'otp' ? (
+                  // REAL EMAIL OTP FLOW
+                  <View>
+                    <Text style={styles.otpBannerText}>
+                      🔒 Masuk tanpa repot kata sandi! Kami akan mengirimkan 6-digit kode OTP asli ke email Anda.
+                    </Text>
+
+                    <Text style={styles.label}>Alamat Email Asli:</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="contoh: idhambaihaqi@gmail.com"
+                      placeholderTextColor={COLORS.textLight}
+                      value={email}
+                      onChangeText={setEmail}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      editable={otpStep === 'send' || !loading}
+                    />
+
+                    {otpStep === 'verify' ? (
+                      <View style={{ marginTop: 8 }}>
+                        <Text style={styles.label}>Masukkan 6-Digit Kode OTP:</Text>
+                        <TextInput
+                          style={[styles.input, styles.otpInput]}
+                          placeholder="123456"
+                          placeholderTextColor={COLORS.textLight}
+                          value={otpToken}
+                          onChangeText={setOtpToken}
+                          keyboardType="number-pad"
+                          maxLength={6}
+                        />
+
+                        <TouchableOpacity
+                          style={[styles.primaryBtn, (!otpToken.trim() || loading) && styles.disabledBtn]}
+                          onPress={handleVerifyOtp}
+                          disabled={!otpToken.trim() || loading}
+                          activeOpacity={0.8}
+                        >
+                          {loading ? (
+                            <ActivityIndicator color={COLORS.white} />
+                          ) : (
+                            <Text style={styles.primaryBtnText}>✓ Verifikasi & Masuk Akun</Text>
+                          )}
+                        </TouchableOpacity>
+
+                        <View style={styles.resendRow}>
+                          <TouchableOpacity
+                            onPress={handleSendOtp}
+                            disabled={countdown > 0 || loading}
+                          >
+                            <Text style={[styles.resendText, countdown > 0 && { color: COLORS.textMuted }]}>
+                              {countdown > 0 ? `Kirim ulang kode dalam ${countdown}s` : 'Kirim Ulang Kode OTP'}
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => setOtpStep('send')}>
+                            <Text style={styles.changeEmailText}>Ganti Email</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={[styles.primaryBtn, (!email.trim() || loading) && styles.disabledBtn]}
+                        onPress={handleSendOtp}
+                        disabled={!email.trim() || loading}
+                        activeOpacity={0.8}
+                      >
+                        {loading ? (
+                          <ActivityIndicator color={COLORS.white} />
+                        ) : (
+                          <Text style={styles.primaryBtnText}>📨 Kirim Kode OTP ke Email</Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ) : (
+                  // PASSWORD FLOW
+                  <View>
+                    <View style={styles.tabToggle}>
+                      <TouchableOpacity
+                        style={[styles.toggleBtn, !isRegisterMode && styles.activeToggle]}
+                        onPress={() => setIsRegisterMode(false)}
+                      >
+                        <Text style={[styles.toggleText, !isRegisterMode && styles.activeToggleText]}>Login</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.toggleBtn, isRegisterMode && styles.activeToggle]}
+                        onPress={() => setIsRegisterMode(true)}
+                      >
+                        <Text style={[styles.toggleText, isRegisterMode && styles.activeToggleText]}>Daftar Baru</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {isRegisterMode && (
+                      <>
+                        <Text style={styles.label}>Nama Lengkap Siswa:</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="Idham Baihaqi"
+                          placeholderTextColor={COLORS.textLight}
+                          value={fullName}
+                          onChangeText={setFullName}
+                        />
+
+                        <Text style={styles.label}>Kelas:</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="XII PPLG 3"
+                          placeholderTextColor={COLORS.textLight}
+                          value={className}
+                          onChangeText={setClassName}
+                        />
+                      </>
+                    )}
+
+                    <Text style={styles.label}>Email:</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="email@sekolah.sch.id"
+                      placeholderTextColor={COLORS.textLight}
+                      value={email}
+                      onChangeText={setEmail}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                    />
+
+                    <Text style={styles.label}>Kata Sandi:</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="••••••••"
+                      placeholderTextColor={COLORS.textLight}
+                      value={password}
+                      onChangeText={setPassword}
+                      secureTextEntry
+                    />
+
+                    <TouchableOpacity
+                      style={[styles.primaryBtn, (!email.trim() || !password.trim() || loading) && styles.disabledBtn]}
+                      onPress={handlePasswordSubmit}
+                      disabled={!email.trim() || !password.trim() || loading}
+                      activeOpacity={0.8}
+                    >
+                      {loading ? (
+                        <ActivityIndicator color={COLORS.white} />
+                      ) : (
+                        <Text style={styles.primaryBtnText}>
+                          {isRegisterMode ? 'Daftar Akun Cloud' : 'Masuk ke Akun Cloud'}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             )}
           </ScrollView>
-
-          <View style={styles.footer}>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-              <Text style={styles.closeBtnText}>Tutup</Text>
-            </TouchableOpacity>
-          </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -340,26 +463,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
     justifyContent: 'flex-end',
   },
   content: {
     backgroundColor: COLORS.white,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '92%',
-    padding: 16,
+    maxHeight: '90%',
+    padding: 18,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
-    paddingBottom: 8,
+    marginBottom: 12,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
   },
-  headerTitleRow: {
+  headerTitleBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -368,7 +491,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
   },
   headerTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 'bold',
     color: COLORS.textDark,
   },
@@ -376,177 +499,219 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textMuted,
   },
-  closeText: {
+  closeBtn: {
     fontSize: 20,
     color: COLORS.textMuted,
     fontWeight: 'bold',
   },
   body: {
-    marginBottom: 10,
+    marginBottom: 12,
   },
-  profileSection: {
-    gap: 10,
+  loggedInBox: {
+    gap: 12,
   },
-  profileCard: {
+  userCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.primaryLight,
-    borderWidth: 1,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1.5,
     borderColor: COLORS.primaryBadge,
-    borderRadius: 14,
-    padding: 12,
-    gap: 10,
+    gap: 12,
   },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: COLORS.white,
+  avatarBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    fontSize: 22,
-  },
-  profileName: {
-    fontSize: 14,
+    color: COLORS.white,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: COLORS.primary,
   },
-  profileEmail: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    marginTop: 1,
-  },
-  profileClass: {
-    fontSize: 10,
+  userName: {
+    fontSize: 15,
+    fontWeight: 'bold',
     color: COLORS.textDark,
-    fontWeight: '600',
+  },
+  userEmail: {
+    fontSize: 12,
+    color: COLORS.textMuted,
     marginTop: 2,
   },
-  logoutBtn: {
+  classBadge: {
+    backgroundColor: COLORS.white,
     paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  logoutText: {
-    fontSize: 11,
-    color: '#EF4444',
-    fontWeight: 'bold',
-  },
-  syncStatusBox: {
-    backgroundColor: '#ECFDF5',
+    paddingVertical: 2,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    marginTop: 6,
     borderWidth: 1,
-    borderColor: '#A7F3D0',
-    borderRadius: 12,
-    padding: 12,
-    gap: 4,
+    borderColor: COLORS.border,
   },
-  syncStatusTitle: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#065F46',
-  },
-  syncStatusSub: {
+  classBadgeText: {
     fontSize: 10,
-    color: '#047857',
-    lineHeight: 15,
+    fontWeight: '600',
+    color: COLORS.primary,
   },
   lastSyncText: {
-    fontSize: 10,
-    color: '#065F46',
-    marginTop: 4,
+    fontSize: 11,
+    color: COLORS.textMuted,
+    textAlign: 'center',
   },
-  syncActions: {
-    gap: 8,
-    marginTop: 4,
+  statusBox: {
+    backgroundColor: '#DCFCE7',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
   },
-  syncBtn: {
+  statusBoxText: {
+    color: '#166534',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  actionGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: 10,
+  },
+  actionBtnPrimary: {
+    flex: 1,
     backgroundColor: COLORS.primary,
     paddingVertical: 12,
     borderRadius: 12,
-    gap: 8,
-  },
-  syncBtnIcon: {
-    fontSize: 16,
-  },
-  syncBtnText: {
-    color: COLORS.white,
-    fontWeight: 'bold',
-    fontSize: 12,
-  },
-  restoreBtn: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.background,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    gap: 4,
+  },
+  actionBtnSecondary: {
+    flex: 1,
+    backgroundColor: '#0284C7',
     paddingVertical: 12,
     borderRadius: 12,
-    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
   },
-  restoreBtnIcon: {
-    fontSize: 16,
+  actionBtnIcon: {
+    fontSize: 18,
   },
-  restoreBtnText: {
-    color: COLORS.textDark,
-    fontWeight: 'bold',
+  actionBtnText: {
+    color: COLORS.white,
     fontSize: 12,
+    fontWeight: 'bold',
   },
   excelBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#059669',
-    paddingVertical: 12,
+    backgroundColor: '#F0FDF4',
+    padding: 12,
     borderRadius: 12,
-    gap: 8,
+    borderWidth: 1.5,
+    borderColor: '#86EFAC',
+    gap: 10,
   },
   excelBtnIcon: {
-    fontSize: 16,
+    fontSize: 22,
   },
-  excelBtnText: {
-    color: COLORS.white,
+  excelBtnTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#166534',
+  },
+  excelBtnSub: {
+    fontSize: 10,
+    color: '#15803D',
+    marginTop: 2,
+  },
+  excelBtnArrow: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#166534',
+  },
+  logoutBtn: {
+    backgroundColor: COLORS.background,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginTop: 4,
+  },
+  logoutText: {
+    color: '#DC2626',
     fontWeight: 'bold',
     fontSize: 12,
   },
-  authForm: {
-    gap: 8,
+  formContainer: {
+    gap: 10,
   },
-  authModeSwitch: {
+  methodRow: {
     flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  methodTab: {
+    flex: 1,
+    paddingVertical: 9,
+    alignItems: 'center',
     backgroundColor: COLORS.background,
     borderRadius: 10,
-    padding: 4,
-    gap: 4,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  authModeBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 8,
+  activeMethodTab: {
+    backgroundColor: COLORS.primaryLight,
+    borderColor: COLORS.primary,
   },
-  activeAuthModeBtn: {
-    backgroundColor: COLORS.white,
-    elevation: 1,
-  },
-  authModeText: {
+  methodTabText: {
     fontSize: 11,
-    fontWeight: '600',
     color: COLORS.textMuted,
+    fontWeight: '600',
   },
-  activeAuthModeText: {
+  activeMethodTabText: {
     color: COLORS.primary,
     fontWeight: 'bold',
   },
-  formDesc: {
+  otpBannerText: {
     fontSize: 11,
     color: COLORS.textMuted,
+    backgroundColor: COLORS.background,
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 8,
     lineHeight: 16,
-    marginVertical: 4,
+  },
+  tabToggle: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.background,
+    borderRadius: 8,
+    padding: 3,
+    marginBottom: 8,
+  },
+  toggleBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    alignItems: 'center',
+    borderRadius: 6,
+  },
+  activeToggle: {
+    backgroundColor: COLORS.white,
+    elevation: 1,
+  },
+  toggleText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    fontWeight: '600',
+  },
+  activeToggleText: {
+    color: COLORS.primary,
+    fontWeight: 'bold',
   },
   label: {
     fontSize: 11,
@@ -558,37 +723,47 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
     color: COLORS.textDark,
   },
-  submitAuthBtn: {
+  otpInput: {
+    fontSize: 18,
+    letterSpacing: 6,
+    textAlign: 'center',
+    fontWeight: 'bold',
+    color: COLORS.primary,
+  },
+  primaryBtn: {
     backgroundColor: COLORS.primary,
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 6,
   },
-  submitAuthText: {
+  disabledBtn: {
+    backgroundColor: COLORS.border,
+  },
+  primaryBtnText: {
     color: COLORS.white,
     fontWeight: 'bold',
-    fontSize: 12,
+    fontSize: 13,
   },
-  footer: {
-    paddingTop: 6,
-  },
-  closeBtn: {
-    backgroundColor: COLORS.background,
-    paddingVertical: 9,
-    borderRadius: 10,
+  resendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    marginTop: 10,
   },
-  closeBtnText: {
-    color: COLORS.textMuted,
-    fontWeight: '600',
+  resendText: {
     fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: 'bold',
+  },
+  changeEmailText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    textDecorationLine: 'underline',
   },
 });

@@ -27,6 +27,7 @@ import { MapPickerModal } from '../components/MapPickerModal';
 interface AttendanceScreenProps {
   currentClass: string;
   onOpenSettings?: () => void;
+  onVoiceAIPress?: () => void;
 }
 
 type TabType = 'presence' | 'friends' | 'locations' | 'qr' | 'history';
@@ -34,6 +35,7 @@ type TabType = 'presence' | 'friends' | 'locations' | 'qr' | 'history';
 export const AttendanceScreen: React.FC<AttendanceScreenProps> = ({
   currentClass,
   onOpenSettings,
+  onVoiceAIPress,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('presence');
   const [auth, setAuth] = useState<StudentAuth | null>(null);
@@ -323,10 +325,11 @@ export const AttendanceScreen: React.FC<AttendanceScreenProps> = ({
   return (
     <SafeAreaView style={styles.container}>
       <Header
-        title="ABSENSI ONLINE"
-        subtitle={auth ? `Digits: ${auth.name}` : 'Presensi Telkom Schools'}
+        title="ABSENSI MANDIRI"
+        subtitle="Presensi Digits Telkom"
         currentClass={currentClass}
         onClassPress={onOpenSettings}
+        onVoiceAIPress={onVoiceAIPress}
       />
 
       {/* Tabs Row */}

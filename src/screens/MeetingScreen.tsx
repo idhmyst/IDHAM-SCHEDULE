@@ -23,6 +23,7 @@ interface MeetingScreenProps {
   currentClass: string;
   onOpenSettings?: () => void;
   onOpenAttendance?: () => void;
+  onVoiceAIPress?: () => void;
 }
 
 type DateFilterType = 'all' | 'today' | 'tomorrow' | 'this_week';
@@ -31,6 +32,7 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({
   currentClass,
   onOpenSettings,
   onOpenAttendance,
+  onVoiceAIPress,
 }) => {
   const [section, setSection] = useState<'tasks' | 'meetings'>('tasks');
   const [meetings, setMeetings] = useState<MeetingAgenda[]>([]);
@@ -173,6 +175,7 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({
         currentClass={currentClass}
         onClassPress={onOpenSettings}
         onAttendancePress={onOpenAttendance}
+        onVoiceAIPress={onVoiceAIPress}
       />
 
       {/* Section Switcher: Tugas vs Meeting */}

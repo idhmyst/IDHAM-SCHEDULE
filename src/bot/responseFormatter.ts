@@ -349,6 +349,22 @@ export async function generateBotResponse(userInput: string, currentClass: strin
       };
     }
 
+    case 'GREETING': {
+      const profile = await CloudSyncService.getLocalProfile();
+      const userName = profile?.fullName ? profile.fullName.split(' ')[0] : 'Idham';
+      const currentHour = now.getHours();
+      let timeGreeting = `Pagi, ${userName}! 🌅`;
+      if (currentHour >= 11 && currentHour < 15) timeGreeting = `Siang, ${userName}! ☀️`;
+      else if (currentHour >= 15 && currentHour < 18.5) timeGreeting = `Sore, ${userName}! 🌇`;
+      else if (currentHour >= 18.5 || currentHour < 4) timeGreeting = `Malam, ${userName}! 🌙`;
+
+      return {
+        text: `Halo, ${timeGreeting}\n\nSaya **IDHAM AI**, asisten jadwal, tugas, presensi, dan evaluasi belajar SMK Telkom Purwokerto untuk kelas **${currentClass}**.\n\nAda yang bisa saya bantu hari ini?`,
+        quickReplies: ['📅 Jadwal Hari Ini', '📍 Absen Online', '📊 Insight & PDF', '📝 Daftar Tugas', '☁️ Akun Cloud'],
+        actionType: 'general',
+      };
+    }
+
     case 'UNKNOWN':
     default: {
       return {

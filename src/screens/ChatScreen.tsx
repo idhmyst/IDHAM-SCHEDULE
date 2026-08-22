@@ -32,12 +32,14 @@ interface ChatScreenProps {
   currentClass: string;
   onOpenSettings?: () => void;
   onOpenAttendance?: () => void;
+  onVoiceAIPress?: () => void;
 }
 
 export const ChatScreen: React.FC<ChatScreenProps> = ({
   currentClass,
   onOpenSettings,
   onOpenAttendance,
+  onVoiceAIPress,
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
@@ -216,11 +218,11 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
   return (
     <SafeAreaView style={styles.container}>
       <Header
-        title="IDHAM SCHEDULE"
         subtitle="Offline AI Assistant"
         currentClass={currentClass}
         onClassPress={onOpenSettings}
         onAttendancePress={handleOpenAttendanceAction}
+        onVoiceAIPress={onVoiceAIPress}
       />
 
       <KeyboardAvoidingView

@@ -67,8 +67,8 @@ export function parseUserQuery(input: string): ParsedQuery {
     return { intent: 'ATTENDANCE' };
   }
 
-  // 5. Greetings
-  if (/^(halo|hai|hi|hey|assalamualaikum|pagi|siang|sore|malam|bot|oy|oi)\b/i.test(clean) && clean.length < 25) {
+  // 5. Greetings & IDHAM AI Wake Word
+  if (/\b(hai idham|halo idham|oke idham|hey idham|idham ai|halo|hai|hi|hey|assalamualaikum|pagi|siang|sore|malam|bot|oy|oi)\b/i.test(clean) && clean.length < 35) {
     return { intent: 'GREETING' };
   }
 

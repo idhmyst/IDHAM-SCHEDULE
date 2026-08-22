@@ -27,6 +27,7 @@ interface SettingsScreenProps {
   currentClass: string;
   onClassChange: (newClass: string) => void;
   onOpenAttendance?: () => void;
+  onVoiceAIPress?: () => void;
 }
 
 const NOTIFICATION_FILTER_OPTIONS = [
@@ -44,6 +45,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   currentClass,
   onClassChange,
   onOpenAttendance,
+  onVoiceAIPress,
 }) => {
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [overrides, setOverrides] = useState<ScheduleOverride[]>([]);
@@ -169,6 +171,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         subtitle="Konfigurasi Aplikasi"
         currentClass={currentClass}
         onAttendancePress={onOpenAttendance}
+        onVoiceAIPress={onVoiceAIPress}
       />
 
       <ScrollView style={styles.scrollArea}>
