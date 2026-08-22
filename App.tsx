@@ -6,7 +6,6 @@ import {
   Text,
   TouchableOpacity,
   SafeAreaView,
-  Platform,
 } from 'react-native';
 import { COLORS } from './src/constants/theme';
 import { ChatScreen } from './src/screens/ChatScreen';
@@ -14,6 +13,7 @@ import { ScheduleScreen } from './src/screens/ScheduleScreen';
 import { MeetingScreen } from './src/screens/MeetingScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { StorageService } from './src/services/storage';
+import { NotificationService } from './src/services/notificationService';
 
 type TabName = 'chat' | 'schedule' | 'meeting' | 'settings';
 
@@ -22,14 +22,16 @@ export default function App() {
   const [currentClass, setCurrentClass] = useState('XII PPLG 3');
 
   useEffect(() => {
-    loadSettings();
+    initApp();
   }, []);
 
-  const loadSettings = async () => {
+  const initApp = async () => {
     const s = await StorageService.getSettings();
     if (s && s.defaultClass) {
       setCurrentClass(s.defaultClass);
     }
+    // Schedule local notification reminders for schedules & meetings
+    await NotificationService.scheduleAllReminders();
   };
 
   const renderCurrentScreen = () => {

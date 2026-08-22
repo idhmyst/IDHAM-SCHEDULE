@@ -14,11 +14,19 @@ import { AVAILABLE_CLASSES } from '../data/masterSchedule';
 import { ScheduleOverride, UserSettings } from '../types';
 import { Header } from '../components/Header';
 import { StorageService } from '../services/storage';
+import { NotificationService } from '../services/notificationService';
 
 interface SettingsScreenProps {
   currentClass: string;
   onClassChange: (newClass: string) => void;
 }
+
+const NOTIFICATION_OPTIONS = [
+  { label: 'Nonaktif', value: 0 },
+  { label: '15 Menit', value: 15 },
+  { label: '30 Menit', value: 30 },
+  { label: '1 Jam', value: 60 },
+];
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   currentClass,
@@ -44,13 +52,34 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       await StorageService.saveSettings(updated);
       setSettings(updated);
       onClassChange(cls);
+      await NotificationService.scheduleAllReminders();
     }
+  };
+
+  const handleSelectNotificationOffset = async (minutes: number) => {
+    if (settings) {
+      const updated = { ...settings, notifyBeforeMinutes: minutes };
+      await StorageService.saveSettings(updated);
+      setSettings(updated);
+      await NotificationService.scheduleAllReminders();
+      Alert.alert(
+        'Pengingat Diperbarui',
+        minutes === 0
+          ? 'Notifikasi pengingat dinonaktifkan.'
+          : `Pengingat diatur ${minutes >= 60 ? '1 jam' : `${minutes} menit`} sebelum jadwal/meeting dimulai.`
+      );
+    }
+  };
+
+  const handleTestNotification = async () => {
+    await NotificationService.sendInstantTestNotification();
   };
 
   const handleDeleteOverride = async (id: string) => {
     await StorageService.deleteOverride(id);
     const o = await StorageService.getOverrides();
     setOverrides(o);
+    await NotificationService.scheduleAllReminders();
   };
 
   const handleClearAllChats = () => {
@@ -88,6 +117,38 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <Text style={styles.appDesc}>Asisten Jadwal & Agenda Offline</Text>
             <Text style={styles.appVersion}>Versi 1.0.0 (Release APK)</Text>
           </View>
+        </View>
+
+        {/* Section: Filter Pengingat / Notifikasi */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>PENGINGAT & NOTIFIKASI JADWAL</Text>
+          <Text style={styles.sectionSubtitle}>
+            Atur waktu notifikasi muncul sebelum jam mata pelajaran atau agenda meeting dimulai:
+          </Text>
+
+          <View style={styles.optionsRow}>
+            {NOTIFICATION_OPTIONS.map(opt => {
+              const isSelected = (settings?.notifyBeforeMinutes ?? 30) === opt.value;
+              return (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[styles.optionChip, isSelected && styles.selectedOptionChip]}
+                  onPress={() => handleSelectNotificationOffset(opt.value)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[styles.optionChipText, isSelected && styles.selectedOptionChipText]}
+                  >
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <TouchableOpacity style={styles.testNotifBtn} onPress={handleTestNotification}>
+            <Text style={styles.testNotifText}>🔔 Tes Bunyikan Notifikasi Sekarang</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Section: Pilih Kelas Aktif */}
@@ -139,7 +200,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               </View>
             ))
           ) : (
-            <Text style={styles.emptyNote}>Tidak ada jadwal yang sedang diubah (menggunakan jadwal baku master).</Text>
+            <Text style={styles.emptyNote}>
+              Tidak ada jadwal yang sedang diubah (menggunakan jadwal baku master).
+            </Text>
           )}
         </View>
 
@@ -221,6 +284,45 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textMuted,
     marginBottom: 14,
+  },
+  optionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  optionChip: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+  },
+  selectedOptionChip: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  optionChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textDark,
+  },
+  selectedOptionChipText: {
+    color: COLORS.white,
+  },
+  testNotifBtn: {
+    backgroundColor: COLORS.primaryLight,
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.primaryBadge,
+  },
+  testNotifText: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   classesGrid: {
     flexDirection: 'row',
