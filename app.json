@@ -31,7 +31,8 @@
     },
     "primaryColor": "#D90000",
     "plugins": [
-      "expo-asset"
+      "expo-asset",
+      "expo-font"
     ],
     "extra": {
       "eas": {
