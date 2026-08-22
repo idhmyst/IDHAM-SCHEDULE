@@ -112,24 +112,20 @@ export const NotificationService = {
     await Notifications.cancelAllScheduledNotificationsAsync();
 
     const settings = await StorageService.getSettings();
-    const offsets: number[] =
+    const globalOffsets: number[] =
       settings.notifyOffsets && settings.notifyOffsets.length > 0
         ? settings.notifyOffsets
         : settings.notifyBeforeMinutes > 0
         ? [settings.notifyBeforeMinutes]
-        : [];
-
-    if (offsets.length === 0) return;
+        : [15, 60];
 
     const currentClass = settings.defaultClass || 'XII PPLG 3';
     const days: DayName[] = ['senin', 'selasa', 'rabu', 'kamis', 'jumat'];
     const now = new Date();
 
-    // Loop through ALL chosen reminder offsets (Multi-input reminder)
-    for (const minutesBefore of offsets) {
+    // 1. Schedule Weekly Class Reminders using Global Offsets
+    for (const minutesBefore of globalOffsets) {
       const reminderText = getReminderLabel(minutesBefore);
-
-      // 1. Schedule Weekly Class Reminders
       for (const day of days) {
         const daySchedule = await ScheduleService.getScheduleForDay(currentClass, day);
         if (!daySchedule || !daySchedule.items) continue;
@@ -173,18 +169,26 @@ export const NotificationService = {
           }
         }
       }
+    }
 
-      // 2. Schedule Meetings Reminders
-      const meetings = await StorageService.getMeetings();
-      for (const meeting of meetings) {
-        if (meeting.isCompleted) continue;
+    // 2. Schedule Meetings Reminders using Custom Offsets per Meeting
+    const meetings = await StorageService.getMeetings();
+    for (const meeting of meetings) {
+      if (meeting.isCompleted) continue;
 
-        const [mYear, mMonth, mDay] = meeting.date.split('-').map(Number);
-        const [mH, mM] = meeting.time.split(':').map(Number);
+      const [mYear, mMonth, mDay] = meeting.date.split('-').map(Number);
+      const [mH, mM] = meeting.time.split(':').map(Number);
 
-        if (isNaN(mYear) || isNaN(mMonth) || isNaN(mDay) || isNaN(mH) || isNaN(mM)) continue;
+      if (isNaN(mYear) || isNaN(mMonth) || isNaN(mDay) || isNaN(mH) || isNaN(mM)) continue;
 
-        const meetingDate = new Date(mYear, mMonth - 1, mDay, mH, mM);
+      const meetingDate = new Date(mYear, mMonth - 1, mDay, mH, mM);
+      const offsetsToUse =
+        meeting.notifyOffsets && meeting.notifyOffsets.length > 0
+          ? meeting.notifyOffsets
+          : globalOffsets;
+
+      for (const minutesBefore of offsetsToUse) {
+        const reminderText = getReminderLabel(minutesBefore);
         const triggerDate = new Date(meetingDate.getTime() - minutesBefore * 60 * 1000);
 
         if (triggerDate > now) {
@@ -207,18 +211,26 @@ export const NotificationService = {
           }
         }
       }
+    }
 
-      // 3. Schedule Task / Assignment Deadlines Reminders
-      const tasks = await StorageService.getTasks();
-      for (const task of tasks) {
-        if (task.isCompleted) continue;
+    // 3. Schedule Task / Assignment Deadlines Reminders using Custom Offsets per Task
+    const tasks = await StorageService.getTasks();
+    for (const task of tasks) {
+      if (task.isCompleted) continue;
 
-        const [tYear, tMonth, tDay] = task.deadlineDate.split('-').map(Number);
-        const [tH, tM] = task.deadlineTime.split(':').map(Number);
+      const [tYear, tMonth, tDay] = task.deadlineDate.split('-').map(Number);
+      const [tH, tM] = task.deadlineTime.split(':').map(Number);
 
-        if (isNaN(tYear) || isNaN(tMonth) || isNaN(tDay) || isNaN(tH) || isNaN(tM)) continue;
+      if (isNaN(tYear) || isNaN(tMonth) || isNaN(tDay) || isNaN(tH) || isNaN(tM)) continue;
 
-        const deadlineDate = new Date(tYear, tMonth - 1, tDay, tH, tM);
+      const deadlineDate = new Date(tYear, tMonth - 1, tDay, tH, tM);
+      const offsetsToUse =
+        task.notifyOffsets && task.notifyOffsets.length > 0
+          ? task.notifyOffsets
+          : globalOffsets;
+
+      for (const minutesBefore of offsetsToUse) {
+        const reminderText = getReminderLabel(minutesBefore);
         const triggerDate = new Date(deadlineDate.getTime() - minutesBefore * 60 * 1000);
 
         if (triggerDate > now) {
@@ -254,7 +266,6 @@ export const NotificationService = {
       return;
     }
 
-    // Play explicit custom audio ringtone & vibration
     try {
       Vibration.vibrate([0, 800, 300, 800, 300, 1000]);
       await playNotificationRingtone();

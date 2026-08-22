@@ -35,6 +35,7 @@ export interface ScheduleOverride {
   newSubjectName?: string;
   newRoom?: string;
   note?: string;
+  notifyOffsets?: number[];
   createdAt: string;
 }
 
@@ -45,6 +46,7 @@ export interface MeetingAgenda {
   time: string; // HH:mm
   location: string;
   notes?: string;
+  notifyOffsets?: number[];
   isCompleted: boolean;
   createdAt: string;
 }
@@ -58,6 +60,7 @@ export interface TaskAssignment {
   description?: string;
   attachedFileName?: string;
   attachedFileUri?: string;
+  notifyOffsets?: number[];
   isCompleted: boolean;
   createdAt: string;
 }
