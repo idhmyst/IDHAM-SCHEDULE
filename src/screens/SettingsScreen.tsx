@@ -34,7 +34,6 @@ const NOTIFICATION_FILTER_OPTIONS = [
   { label: '1 Hari Sebelum (H-1)', value: 1440, icon: '📅', badge: 'H-1' },
   { label: '1 Minggu Sebelum (H-7)', value: 10080, icon: '🗓️', badge: 'H-7' },
   { label: '1 Bulan Sebelum (H-30)', value: 43200, icon: '📆', badge: 'H-30' },
-  { label: 'Nonaktifkan Pengingat', value: 0, icon: '🔕', badge: 'Off' },
 ];
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
@@ -45,6 +44,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [overrides, setOverrides] = useState<ScheduleOverride[]>([]);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
+  const [selectedOffsets, setSelectedOffsets] = useState<number[]>([30]);
 
   useEffect(() => {
     loadData();
@@ -55,6 +55,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     const o = await StorageService.getOverrides();
     setSettings(s);
     setOverrides(o);
+
+    if (s.notifyOffsets && s.notifyOffsets.length > 0) {
+      setSelectedOffsets(s.notifyOffsets);
+    } else if (s.notifyBeforeMinutes > 0) {
+      setSelectedOffsets([s.notifyBeforeMinutes]);
+    } else {
+      setSelectedOffsets([]);
+    }
   };
 
   const handleSelectClass = async (cls: string) => {
@@ -67,21 +75,38 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     }
   };
 
-  const handleSelectNotificationOffset = async (minutes: number) => {
+  // Toggle multi-select reminder
+  const handleToggleOffset = (val: number) => {
+    let updated: number[];
+    if (selectedOffsets.includes(val)) {
+      updated = selectedOffsets.filter(x => x !== val);
+    } else {
+      updated = [...selectedOffsets, val].sort((a, b) => a - b);
+    }
+    setSelectedOffsets(updated);
+  };
+
+  const handleSaveMultiOffsets = async () => {
     if (settings) {
-      const updated = { ...settings, notifyBeforeMinutes: minutes };
+      const updated = {
+        ...settings,
+        notifyOffsets: selectedOffsets,
+        notifyBeforeMinutes: selectedOffsets[0] || 0,
+      };
       await StorageService.saveSettings(updated);
       setSettings(updated);
       await NotificationService.scheduleAllReminders();
       setShowFilterDrawer(false);
 
-      const label = getReminderLabel(minutes);
-      Alert.alert(
-        'Pengingat Diperbarui 🔔',
-        minutes === 0
-          ? 'Notifikasi alarm pengingat dinonaktifkan.'
-          : `Pengingat diatur berdering ${label} sebelum jadwal, meeting, atau deadline tugas!`
-      );
+      if (selectedOffsets.length === 0) {
+        Alert.alert('Pengingat Dinonaktifkan', 'Semua notifikasi pengingat telah dimatikan.');
+      } else {
+        const labels = selectedOffsets.map(o => getReminderLabel(o)).join(', ');
+        Alert.alert(
+          'Multi-Pengingat Disimpan! 🔔',
+          `Alarm pengingat akan berbunyi di beberapa waktu:\n• ${labels}`
+        );
+      }
     }
   };
 
@@ -144,11 +169,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     ]);
   };
 
-  const currentMinutes = settings?.notifyBeforeMinutes ?? 30;
-  const currentOption =
-    NOTIFICATION_FILTER_OPTIONS.find(opt => opt.value === currentMinutes) ||
-    NOTIFICATION_FILTER_OPTIONS[3];
-
   return (
     <SafeAreaView style={styles.container}>
       <Header
@@ -168,7 +188,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <View style={styles.appInfo}>
             <Text style={styles.appName}>IDHAM SCHEDULE</Text>
             <Text style={styles.appDesc}>Asisten Jadwal & Agenda Offline</Text>
-            <Text style={styles.appVersion}>Versi 1.0.0 (OTA Live Update Ready)</Text>
+            <Text style={styles.appVersion}>Versi 1.0.0 (Multi-Pengingat & Sound Ready)</Text>
           </View>
         </View>
 
@@ -193,11 +213,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* Section: Hamburger Filtering Bar Pengingat / Notifikasi */}
+        {/* Section: Multi-Select Hamburger Filtering Bar Pengingat */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>PENGINGAT & FILTER NOTIFIKASI</Text>
+          <Text style={styles.sectionTitle}>PENGINGAT & FILTER NOTIFIKASI (MULTI-INPUT)</Text>
           <Text style={styles.sectionSubtitle}>
-            Klik Filtering Bar di bawah untuk memilih interval waktu pengingat berbunyi:
+            Anda dapat memilih lebih dari 1 waktu pengingat sekaligus (misal: 15 menit & 1 jam & 1 hari sebelum):
           </Text>
 
           {/* Filtering Bar Menu */}
@@ -210,13 +230,17 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <Text style={styles.hamburgerIcon}>☰</Text>
             </View>
             <View style={styles.filterBarInfo}>
-              <Text style={styles.filterBarLabel}>Interval Pengingat Aktif</Text>
-              <Text style={styles.filterBarValue}>
-                {currentOption.icon} {currentOption.label}
+              <Text style={styles.filterBarLabel}>
+                Pengingat Aktif ({selectedOffsets.length} Waktu)
+              </Text>
+              <Text style={styles.filterBarValue} numberOfLines={2}>
+                {selectedOffsets.length > 0
+                  ? selectedOffsets.map(o => getReminderLabel(o)).join(' • ')
+                  : '🔕 Pengingat Nonaktif'}
               </Text>
             </View>
             <View style={styles.filterBadge}>
-              <Text style={styles.filterBadgeText}>{currentOption.badge}</Text>
+              <Text style={styles.filterBadgeText}>Ubah (☰)</Text>
             </View>
           </TouchableOpacity>
 
@@ -291,31 +315,38 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* Hamburger Filtering Drawer Modal */}
+      {/* Hamburger Multi-Select Filtering Drawer Modal */}
       <Modal visible={showFilterDrawer} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalDrawer}>
             <View style={styles.modalHeader}>
               <View style={styles.modalTitleRow}>
                 <Text style={styles.modalIcon}>☰</Text>
-                <Text style={styles.modalTitle}>Pilih Interval Pengingat Notifikasi</Text>
+                <Text style={styles.modalTitle}>Pilih Pengingat (Bisa Lebih dari 1)</Text>
               </View>
               <TouchableOpacity onPress={() => setShowFilterDrawer(false)}>
                 <Text style={styles.modalCloseText}>✕</Text>
               </TouchableOpacity>
             </View>
 
+            <Text style={styles.drawerHint}>
+              Centang semua waktu yang Anda inginkan agar HP berbunyi & bergetar di setiap waktu tersebut:
+            </Text>
+
             <ScrollView style={styles.drawerList} showsVerticalScrollIndicator={false}>
               {NOTIFICATION_FILTER_OPTIONS.map(option => {
-                const isSelected = currentMinutes === option.value;
+                const isSelected = selectedOffsets.includes(option.value);
                 return (
                   <TouchableOpacity
                     key={option.value}
                     style={[styles.drawerItem, isSelected && styles.selectedDrawerItem]}
-                    onPress={() => handleSelectNotificationOffset(option.value)}
+                    onPress={() => handleToggleOffset(option.value)}
                     activeOpacity={0.7}
                   >
                     <View style={styles.drawerItemLeft}>
+                      <View style={[styles.checkbox, isSelected && styles.checkboxActive]}>
+                        {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                      </View>
                       <Text style={styles.drawerItemIcon}>{option.icon}</Text>
                       <Text
                         style={[
@@ -347,11 +378,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               })}
             </ScrollView>
 
-            <TouchableOpacity
-              style={styles.closeDrawerBtn}
-              onPress={() => setShowFilterDrawer(false)}
-            >
-              <Text style={styles.closeDrawerBtnText}>Tutup Menu Filter</Text>
+            <TouchableOpacity style={styles.saveMultiBtn} onPress={handleSaveMultiOffsets}>
+              <Text style={styles.saveMultiBtnText}>
+                ✓ Terapkan ({selectedOffsets.length} Waktu Pengingat)
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -471,7 +501,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   filterBarValue: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 'bold',
     color: COLORS.primary,
     marginTop: 2,
@@ -589,16 +619,16 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
-    maxHeight: '80%',
+    maxHeight: '85%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingBottom: 12,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   modalTitleRow: {
     flexDirection: 'row',
@@ -622,14 +652,20 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     padding: 4,
   },
+  drawerHint: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginBottom: 10,
+    lineHeight: 16,
+  },
   drawerList: {
-    marginVertical: 6,
+    marginVertical: 4,
   },
   drawerItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
     marginBottom: 6,
@@ -644,6 +680,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    flex: 1,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxActive: {
+    backgroundColor: COLORS.primary,
+  },
+  checkmark: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   drawerItemIcon: {
     fontSize: 16,
@@ -677,17 +731,16 @@ const styles = StyleSheet.create({
   selectedDrawerBadgeText: {
     color: COLORS.white,
   },
-  closeDrawerBtn: {
-    backgroundColor: COLORS.background,
-    paddingVertical: 12,
+  saveMultiBtn: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 10,
-    borderWidth: 1,
-    borderColor: COLORS.border,
   },
-  closeDrawerBtnText: {
-    color: COLORS.textMuted,
-    fontWeight: '600',
+  saveMultiBtnText: {
+    color: COLORS.white,
+    fontWeight: 'bold',
+    fontSize: 14,
   },
 });

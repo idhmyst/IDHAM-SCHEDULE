@@ -20,6 +20,18 @@ interface MeetingModalProps {
   onSave: (meeting: MeetingAgenda) => void;
 }
 
+const QUICK_DATE_PRESETS = [
+  { label: 'Hari Ini', offsetDays: 0 },
+  { label: 'Besok', offsetDays: 1 },
+  { label: 'Lusa', offsetDays: 2 },
+  { label: '+3 Hari', offsetDays: 3 },
+  { label: '1 Minggu', offsetDays: 7 },
+];
+
+const QUICK_TIME_PRESETS = ['08:00', '10:00', '13:00', '14:00', '15:30', '19:00'];
+
+const QUICK_LOCATIONS = ['Ruang Guru', 'Lab RPL 2', 'Ruang Sentra', 'Kelas XII PPLG 3', 'Online (GMeet)'];
+
 export const MeetingModal: React.FC<MeetingModalProps> = ({
   visible,
   initialData,
@@ -50,6 +62,13 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
       }
     }
   }, [visible, initialData]);
+
+  const handleApplyDatePreset = (offsetDays: number) => {
+    const target = new Date();
+    target.setDate(target.getDate() + offsetDays);
+    const dateStr = target.toISOString().split('T')[0];
+    setDate(dateStr);
+  };
 
   const handleSave = () => {
     if (!title.trim()) return;
@@ -85,7 +104,7 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.body}>
+          <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
             <Text style={styles.label}>Judul Agenda / Meeting *</Text>
             <TextInput
               style={styles.input}
@@ -95,9 +114,23 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
               onChangeText={setTitle}
             />
 
+            {/* Quick Date Presets */}
+            <Text style={styles.label}>Pilih Tanggal (Klik Tombol / Ketik YYYY-MM-DD)</Text>
+            <View style={styles.datePresetsRow}>
+              {QUICK_DATE_PRESETS.map((dp, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.datePresetChip}
+                  onPress={() => handleApplyDatePreset(dp.offsetDays)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.datePresetText}>⚡ {dp.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
             <View style={styles.row}>
               <View style={styles.col}>
-                <Text style={styles.label}>Tanggal (YYYY-MM-DD)</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="2026-08-25"
@@ -108,7 +141,6 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
               </View>
 
               <View style={styles.col}>
-                <Text style={styles.label}>Waktu (HH:mm)</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="14:00"
@@ -119,10 +151,42 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
               </View>
             </View>
 
+            {/* Quick Time Presets */}
+            <View style={styles.timePresetsRow}>
+              {QUICK_TIME_PRESETS.map((t, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={[styles.timeChip, time === t && styles.activeTimeChip]}
+                  onPress={() => setTime(t)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.timeChipText, time === t && styles.activeTimeChipText]}>
+                    ⏰ {t}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Quick Locations */}
             <Text style={styles.label}>Lokasi Pertemuan</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
+              {QUICK_LOCATIONS.map((loc, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={[styles.locChip, location === loc && styles.activeLocChip]}
+                  onPress={() => setLocation(loc)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.locChipText, location === loc && styles.activeLocChipText]}>
+                    📍 {loc}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
             <TextInput
-              style={styles.input}
-              placeholder="Contoh: Ruang Sentra / Lab RPL"
+              style={[styles.input, { marginTop: 6 }]}
+              placeholder="Atau ketik lokasi lain..."
               placeholderTextColor={COLORS.textLight}
               value={location}
               onChangeText={setLocation}
@@ -167,14 +231,14 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '85%',
+    maxHeight: '88%',
     padding: 20,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
@@ -190,14 +254,84 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   body: {
-    marginBottom: 16,
+    marginBottom: 14,
   },
   label: {
     fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textBody,
+    fontWeight: '700',
+    color: COLORS.textDark,
     marginBottom: 6,
     marginTop: 10,
+  },
+  datePresetsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 6,
+    flexWrap: 'wrap',
+  },
+  datePresetChip: {
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.primaryBadge,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  datePresetText: {
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: 'bold',
+  },
+  timePresetsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 6,
+  },
+  timeChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  activeTimeChip: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  timeChipText: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+    fontWeight: '600',
+  },
+  activeTimeChipText: {
+    color: COLORS.white,
+    fontWeight: 'bold',
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  locChip: {
+    backgroundColor: COLORS.background,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  activeLocChip: {
+    backgroundColor: COLORS.primaryLight,
+    borderColor: COLORS.primary,
+  },
+  locChipText: {
+    fontSize: 11,
+    color: COLORS.textBody,
+    fontWeight: '600',
+  },
+  activeLocChipText: {
+    color: COLORS.primary,
+    fontWeight: 'bold',
   },
   input: {
     backgroundColor: COLORS.background,
@@ -205,17 +339,17 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
+    paddingVertical: 9,
+    fontSize: 13,
     color: COLORS.textDark,
   },
   textArea: {
-    height: 70,
+    height: 60,
     textAlignVertical: 'top',
   },
   row: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   col: {
     flex: 1,

@@ -22,6 +22,25 @@ interface TaskModalProps {
   onSave: (task: TaskAssignment) => void;
 }
 
+const QUICK_DATE_PRESETS = [
+  { label: 'Hari Ini', offsetDays: 0 },
+  { label: 'Besok', offsetDays: 1 },
+  { label: 'Lusa', offsetDays: 2 },
+  { label: '+3 Hari', offsetDays: 3 },
+  { label: '1 Minggu', offsetDays: 7 },
+];
+
+const QUICK_TIME_PRESETS = ['23:59', '17:00', '14:00', '12:00', '07:00'];
+
+const QUICK_SUBJECT_PRESETS = [
+  'Matematika (MTK-4)',
+  'Konsentrasi Kejuruan (MP1-C)',
+  'Bahasa Inggris (ING-1)',
+  'Bahasa Indonesia (INA-4)',
+  'Pendidikan Agama (PAI-3)',
+  'PKK / Kewirausahaan',
+];
+
 export const TaskModal: React.FC<TaskModalProps> = ({
   visible,
   initialData,
@@ -58,6 +77,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       }
     }
   }, [visible, initialData]);
+
+  const handleApplyDatePreset = (offsetDays: number) => {
+    const target = new Date();
+    target.setDate(target.getDate() + offsetDays);
+    const dateStr = target.toISOString().split('T')[0];
+    setDeadlineDate(dateStr);
+  };
 
   const handlePickDocument = async () => {
     try {
@@ -117,6 +143,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           </View>
 
           <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
+            {/* Judul */}
             <Text style={styles.label}>Judul Tugas *</Text>
             <TextInput
               style={styles.input}
@@ -126,18 +153,48 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               onChangeText={setTitle}
             />
 
-            <Text style={styles.label}>Mata Pelajaran</Text>
+            {/* Quick Mapel Presets */}
+            <Text style={styles.label}>Pilih Mata Pelajaran (Sekali Pencet)</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
+              {QUICK_SUBJECT_PRESETS.map((s, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={[styles.subjectChip, subject === s && styles.activeSubjectChip]}
+                  onPress={() => setSubject(s)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.subjectChipText, subject === s && styles.activeSubjectChipText]}>
+                    {s}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
             <TextInput
-              style={styles.input}
-              placeholder="Contoh: Matematika (MTK-4) / PAI / Kejuruan"
+              style={[styles.input, { marginTop: 6 }]}
+              placeholder="Atau ketik mapel lain..."
               placeholderTextColor={COLORS.textLight}
               value={subject}
               onChangeText={setSubject}
             />
 
+            {/* Quick Date Presets */}
+            <Text style={styles.label}>Deadline Tanggal (Klik Tombol / Ketik YYYY-MM-DD)</Text>
+            <View style={styles.datePresetsRow}>
+              {QUICK_DATE_PRESETS.map((dp, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.datePresetChip}
+                  onPress={() => handleApplyDatePreset(dp.offsetDays)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.datePresetText}>⚡ {dp.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
             <View style={styles.row}>
               <View style={styles.col}>
-                <Text style={styles.label}>Deadline Tanggal (YYYY-MM-DD)</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="2026-08-25"
@@ -148,7 +205,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               </View>
 
               <View style={styles.col}>
-                <Text style={styles.label}>Deadline Jam (HH:mm)</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="23:59"
@@ -157,6 +213,22 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   onChangeText={setDeadlineTime}
                 />
               </View>
+            </View>
+
+            {/* Quick Time Presets */}
+            <View style={styles.timePresetsRow}>
+              {QUICK_TIME_PRESETS.map((t, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={[styles.timeChip, deadlineTime === t && styles.activeTimeChip]}
+                  onPress={() => setDeadlineTime(t)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.timeChipText, deadlineTime === t && styles.activeTimeChipText]}>
+                    ⏰ {t}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
 
             {/* Lampiran Dokumen Tugas */}
@@ -187,7 +259,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             <Text style={styles.label}>Catatan & Instruksi Guru</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
-              placeholder="Format PDF, dikirim ke Google Classroom sebelum jam 12 malam..."
+              placeholder="Format PDF, dikirim ke Google Classroom..."
               placeholderTextColor={COLORS.textLight}
               multiline
               numberOfLines={3}
@@ -223,14 +295,14 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '90%',
+    maxHeight: '92%',
     padding: 20,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
@@ -246,14 +318,85 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   body: {
-    marginBottom: 16,
+    marginBottom: 14,
   },
   label: {
     fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textBody,
+    fontWeight: '700',
+    color: COLORS.textDark,
     marginBottom: 6,
     marginTop: 10,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingVertical: 2,
+  },
+  subjectChip: {
+    backgroundColor: COLORS.background,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  activeSubjectChip: {
+    backgroundColor: COLORS.primaryLight,
+    borderColor: COLORS.primary,
+  },
+  subjectChipText: {
+    fontSize: 11,
+    color: COLORS.textBody,
+    fontWeight: '600',
+  },
+  activeSubjectChipText: {
+    color: COLORS.primary,
+    fontWeight: 'bold',
+  },
+  datePresetsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 6,
+    flexWrap: 'wrap',
+  },
+  datePresetChip: {
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.primaryBadge,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  datePresetText: {
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: 'bold',
+  },
+  timePresetsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 6,
+  },
+  timeChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  activeTimeChip: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  timeChipText: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+    fontWeight: '600',
+  },
+  activeTimeChipText: {
+    color: COLORS.white,
+    fontWeight: 'bold',
   },
   input: {
     backgroundColor: COLORS.background,
@@ -261,17 +404,17 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
+    paddingVertical: 9,
+    fontSize: 13,
     color: COLORS.textDark,
   },
   textArea: {
-    height: 70,
+    height: 60,
     textAlignVertical: 'top',
   },
   row: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   col: {
     flex: 1,
@@ -281,14 +424,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.primaryBadge,
     borderRadius: 12,
-    paddingVertical: 12,
+    paddingVertical: 10,
     alignItems: 'center',
     borderStyle: 'dashed',
   },
   pickFileText: {
     color: COLORS.primary,
     fontWeight: 'bold',
-    fontSize: 13,
+    fontSize: 12,
   },
   attachedFileBox: {
     flexDirection: 'row',
@@ -298,16 +441,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.primaryBadge,
     borderRadius: 12,
-    padding: 10,
+    padding: 8,
   },
   fileInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    gap: 8,
+    gap: 6,
   },
   fileIcon: {
-    fontSize: 16,
+    fontSize: 14,
   },
   fileNameText: {
     fontSize: 12,
@@ -316,10 +459,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   removeFileText: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#EF4444',
     fontWeight: 'bold',
-    marginLeft: 8,
+    marginLeft: 6,
   },
   footer: {
     flexDirection: 'row',

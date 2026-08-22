@@ -87,5 +87,6 @@ export interface UserSettings {
   userName: string;
   defaultClass: string;
   notifyBeforeMinutes: number;
+  notifyOffsets?: number[]; // Multi-select reminder intervals (e.g. [15, 30, 60, 1440])
   enableVibration: boolean;
 }

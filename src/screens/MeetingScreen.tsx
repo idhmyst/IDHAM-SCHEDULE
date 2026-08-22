@@ -24,6 +24,8 @@ interface MeetingScreenProps {
   onOpenSettings?: () => void;
 }
 
+type DateFilterType = 'all' | 'today' | 'tomorrow' | 'this_week';
+
 export const MeetingScreen: React.FC<MeetingScreenProps> = ({
   currentClass,
   onOpenSettings,
@@ -32,6 +34,7 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({
   const [meetings, setMeetings] = useState<MeetingAgenda[]>([]);
   const [tasks, setTasks] = useState<TaskAssignment[]>([]);
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('all');
+  const [dateFilter, setDateFilter] = useState<DateFilterType>('all');
   const [refreshing, setRefreshing] = useState(false);
 
   const [showMeetingModal, setShowMeetingModal] = useState(false);
@@ -125,16 +128,39 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({
     }
   };
 
-  const filteredTasks = tasks.filter(t => {
-    if (filter === 'pending') return !t.isCompleted;
-    if (filter === 'completed') return t.isCompleted;
+  const isMatchingDateFilter = (itemDateStr: string) => {
+    if (dateFilter === 'all') return true;
+
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+    if (dateFilter === 'today') return itemDateStr === todayStr;
+    if (dateFilter === 'tomorrow') return itemDateStr === tomorrowStr;
+
+    if (dateFilter === 'this_week') {
+      const targetDate = new Date(itemDateStr);
+      const diffTime = targetDate.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays >= 0 && diffDays <= 7;
+    }
+
     return true;
+  };
+
+  const filteredTasks = tasks.filter(t => {
+    if (filter === 'pending' && t.isCompleted) return false;
+    if (filter === 'completed' && !t.isCompleted) return false;
+    return isMatchingDateFilter(t.deadlineDate);
   });
 
   const filteredMeetings = meetings.filter(m => {
-    if (filter === 'pending') return !m.isCompleted;
-    if (filter === 'completed') return m.isCompleted;
-    return true;
+    if (filter === 'pending' && m.isCompleted) return false;
+    if (filter === 'completed' && !m.isCompleted) return false;
+    return isMatchingDateFilter(m.date);
   });
 
   return (
@@ -167,7 +193,33 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* Filter Tabs */}
+      {/* Date Filter Bar */}
+      <View style={styles.dateFilterContainer}>
+        {[
+          { label: 'Semua Tanggal', value: 'all' as DateFilterType },
+          { label: '📅 Hari Ini', value: 'today' as DateFilterType },
+          { label: '⏰ Besok', value: 'tomorrow' as DateFilterType },
+          { label: '🗓️ 7 Hari Kedepan', value: 'this_week' as DateFilterType },
+        ].map(df => (
+          <TouchableOpacity
+            key={df.value}
+            style={[styles.dateFilterChip, dateFilter === df.value && styles.activeDateFilterChip]}
+            onPress={() => setDateFilter(df.value)}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.dateFilterText,
+                dateFilter === df.value && styles.activeDateFilterText,
+              ]}
+            >
+              {df.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Status Filter Tabs (Semua / Belum Selesai / Selesai) */}
       <View style={styles.filterContainer}>
         {(['all', 'pending', 'completed'] as const).map(tab => (
           <TouchableOpacity
@@ -177,7 +229,7 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({
             activeOpacity={0.7}
           >
             <Text style={[styles.filterText, filter === tab && styles.activeFilterText]}>
-              {tab === 'all' ? 'Semua' : tab === 'pending' ? 'Belum Selesai' : 'Selesai'}
+              {tab === 'all' ? 'Semua Status' : tab === 'pending' ? 'Belum Selesai' : 'Selesai'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -256,9 +308,9 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({
             ) : (
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyIcon}>📝</Text>
-                <Text style={styles.emptyTitle}>Tidak Ada Tugas</Text>
+                <Text style={styles.emptyTitle}>Tidak Ada Tugas Ditemukan</Text>
                 <Text style={styles.emptySubtitle}>
-                  Klik tombol (+) di bawah untuk menambahkan tugas baru beserta lampiran file dokumen.
+                  Tidak ada tugas yang sesuai dengan filter tanggal atau status yang Anda pilih.
                 </Text>
               </View>
             )
@@ -318,9 +370,9 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({
             ) : (
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyIcon}>📌</Text>
-                <Text style={styles.emptyTitle}>Belum Ada Meeting</Text>
+                <Text style={styles.emptyTitle}>Belum Ada Meeting Ditemukan</Text>
                 <Text style={styles.emptySubtitle}>
-                  Jadwalkan janji pertemuan atau rapat dengan tombol (+).
+                  Tidak ada jadwal janji temu untuk filter tanggal yang dipilih.
                 </Text>
               </View>
             )
@@ -394,14 +446,42 @@ const styles = StyleSheet.create({
   activeSectionBtnText: {
     color: COLORS.primary,
   },
+  dateFilterContainer: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  dateFilterChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  activeDateFilterChip: {
+    backgroundColor: COLORS.primaryLight,
+    borderColor: COLORS.primary,
+  },
+  dateFilterText: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+    fontWeight: '600',
+  },
+  activeDateFilterText: {
+    color: COLORS.primary,
+    fontWeight: 'bold',
+  },
   filterContainer: {
     flexDirection: 'row',
     backgroundColor: COLORS.white,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
-    gap: 8,
+    gap: 6,
   },
   filterTab: {
     flex: 1,
