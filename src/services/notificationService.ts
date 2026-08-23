@@ -5,13 +5,15 @@ import { DayName, DaySchedule, MeetingAgenda, ScheduleItem, ScheduleOverride, Ta
 import { ScheduleService } from './scheduleService';
 import { StorageService } from './storage';
 
+export const ALARM_CHANNEL_ID = 'idham_alarm_channel_v5';
+
 // In-app custom audio player for notif_ringtone.mp3
 export const playNotificationRingtone = async () => {
   if (Platform.OS === 'web') return;
   try {
     await Audio.setAudioModeAsync({
       playsInSilentModeIOS: true,
-      shouldDuckAndroid: true,
+      shouldDuckAndroid: false,
       staysActiveInBackground: true,
     });
 
@@ -29,7 +31,8 @@ export const playNotificationRingtone = async () => {
 export const triggerAlarmSoundAndVibration = async () => {
   if (Platform.OS !== 'web') {
     try {
-      Vibration.vibrate([0, 600, 250, 600, 250, 900]);
+      Vibration.cancel();
+      Vibration.vibrate([0, 800, 300, 800, 300, 1000]);
       await playNotificationRingtone();
     } catch (e) {
       console.log('Vibrate/audio error:', e);
@@ -45,6 +48,7 @@ Notifications.setNotificationHandler({
       shouldShowAlert: true,
       shouldPlaySound: true,
       shouldSetBadge: true,
+      priority: Notifications.AndroidNotificationPriority.MAX,
     };
   },
 });
@@ -87,10 +91,11 @@ export const NotificationService = {
     }
 
     if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('schedule-reminders', {
-        name: 'Pengingat Jadwal & Mapel',
+      // Configure 'default' channel so ALL unrouted Android notifications play sound with MAX importance
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'Pengingat Utama IDHAM SCHEDULE',
         importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 600, 250, 600, 250, 900],
+        vibrationPattern: [0, 800, 300, 800, 300, 1000],
         lightColor: '#D90000',
         sound: 'notification.mp3',
         enableVibrate: true,
@@ -98,12 +103,17 @@ export const NotificationService = {
         bypassDnd: true,
         showBadge: true,
         lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+        audioAttributes: {
+          usage: Notifications.AndroidAudioUsage.ALARM,
+          contentType: Notifications.AndroidAudioContentType.SONIFICATION,
+        },
       });
 
-      await Notifications.setNotificationChannelAsync('task-reminders', {
-        name: 'Pengingat Deadline Tugas & File',
+      // High-priority Custom Ringtone Alarm Channel
+      await Notifications.setNotificationChannelAsync(ALARM_CHANNEL_ID, {
+        name: 'Pengingat Jadwal & Alarm Suara',
         importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 600, 250, 600, 250, 900],
+        vibrationPattern: [0, 800, 300, 800, 300, 1000],
         lightColor: '#D90000',
         sound: 'notification.mp3',
         enableVibrate: true,
@@ -111,6 +121,10 @@ export const NotificationService = {
         bypassDnd: true,
         showBadge: true,
         lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+        audioAttributes: {
+          usage: Notifications.AndroidAudioUsage.ALARM,
+          contentType: Notifications.AndroidAudioContentType.SONIFICATION,
+        },
       });
     }
 
@@ -168,11 +182,12 @@ export const NotificationService = {
                 title: `🔔 Mapel Berikutnya: ${item.subjectCode} (${item.subjectName})`,
                 body: `Mulai ${reminderText} (${item.startTime} WIB) di Ruang ${item.room}. Jangan terlambat!`,
                 sound: 'notification.mp3',
-                vibrate: [0, 600, 250, 600, 250, 900],
+                vibrate: [0, 800, 300, 800, 300, 1000],
                 data: { type: 'schedule', itemId: item.id, offset: minutesBefore },
               },
               trigger: {
                 type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+                channelId: ALARM_CHANNEL_ID,
                 weekday,
                 hour: targetHour,
                 minute: targetMinute,
@@ -212,11 +227,12 @@ export const NotificationService = {
                 title: `📌 Agenda Meeting: ${meeting.title}`,
                 body: `Mulai ${reminderText} (${meeting.time} WIB) di ${meeting.location}.`,
                 sound: 'notification.mp3',
-                vibrate: [0, 600, 250, 600, 250, 900],
+                vibrate: [0, 800, 300, 800, 300, 1000],
                 data: { type: 'meeting', meetingId: meeting.id, offset: minutesBefore },
               },
               trigger: {
                 type: Notifications.SchedulableTriggerInputTypes.DATE,
+                channelId: ALARM_CHANNEL_ID,
                 date: triggerDate,
               },
             });
@@ -258,11 +274,12 @@ export const NotificationService = {
                 title: `⚠️ Deadline Tugas: ${task.title} [${task.subject}]`,
                 body: `Batas pengumpulan ${reminderText} (${task.deadlineTime} WIB). ${fileStatus}`,
                 sound: 'notification.mp3',
-                vibrate: [0, 600, 250, 600, 250, 900],
+                vibrate: [0, 800, 300, 800, 300, 1000],
                 data: { type: 'task', taskId: task.id, offset: minutesBefore },
               },
               trigger: {
                 type: Notifications.SchedulableTriggerInputTypes.DATE,
+                channelId: ALARM_CHANNEL_ID,
                 date: triggerDate,
               },
             });
@@ -280,16 +297,21 @@ export const NotificationService = {
       return;
     }
 
-    await triggerAlarmSoundAndVibration();
     await this.requestPermissions();
+    await triggerAlarmSoundAndVibration();
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: '🔔 Test Pengingat IDHAM SCHEDULE',
-        body: 'Notifikasi bersuara notif_ringtone.mp3 & getar fisik aktif!',
+        title: '🔔 Alarm IDHAM SCHEDULE Berbunyi!',
+        body: 'Notifikasi bersuara notif_ringtone.mp3 & getaran fisik berhasil diuji!',
         sound: 'notification.mp3',
-        vibrate: [0, 600, 250, 600, 250, 900],
+        vibrate: [0, 800, 300, 800, 300, 1000],
+        data: { test: true },
       },
-      trigger: null,
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        channelId: ALARM_CHANNEL_ID,
+        seconds: 1,
+      },
     });
   },
 };

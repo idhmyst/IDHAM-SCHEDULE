@@ -275,10 +275,16 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
             <TouchableOpacity
               style={styles.testNotifBtn}
-              onPress={() => NotificationService.sendInstantTestNotification()}
+              onPress={async () => {
+                await NotificationService.sendInstantTestNotification();
+                Alert.alert(
+                  'Tes Alarm Dikirim! 🔔',
+                  'Sinyal getar fisik dan nada dering notif_ringtone.mp3 telah diaktifkan ke channel alarm Android.'
+                );
+              }}
               activeOpacity={0.8}
             >
-              <Text style={styles.testNotifText}>🔔 Tes Ringtone & Getar Notifikasi</Text>
+              <Text style={styles.testNotifText}>🔊 Tes Bunyi Ringtone & Getar Notifikasi</Text>
             </TouchableOpacity>
           </View>
         </View>
