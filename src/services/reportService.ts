@@ -2,10 +2,10 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import { Platform, Alert } from 'react-native';
-import { AttendanceService } from './attendanceService';
+import { AttendanceRecord, AttendanceService } from './attendanceService';
 import { StorageService } from './storage';
 import { CloudSyncService } from './cloudSync';
-import { KnowledgeService } from './knowledgeService';
+import { TaskAssignment } from '../types';
 
 export interface AttendanceStats {
   hadir: number;
@@ -31,13 +31,16 @@ export interface InsightData {
   taskStats: TaskStats;
   weeklyProductivityScore: number;
   summaryText: string;
+  recentAttendance: AttendanceRecord[];
+  recentTasks: TaskAssignment[];
 }
 
 export const ReportService = {
+  // 1. Calculate 100% Real-Time Live Insights from Local & Supabase Storage
   async getInsights(period: 'week' | 'month' = 'month'): Promise<InsightData> {
     const history = await AttendanceService.getHistory();
     const tasks = await StorageService.getTasks();
-    const profile = await CloudSyncService.getLocalProfile();
+    const profile = await CloudSyncService.getCurrentUser();
 
     const studentName = profile?.fullName || 'Idham Baihaqi';
     const className = profile?.className || 'XII PPLG 3';
@@ -45,52 +48,79 @@ export const ReportService = {
     const now = new Date();
     const filterDays = period === 'week' ? 7 : 30;
 
-    // Filter attendance in period
+    // Filter attendance in period with accurate date comparison
     const filteredAttendance = history.filter(item => {
-      const itemDate = new Date(item.date);
-      const diffDays = (now.getTime() - itemDate.getTime()) / (1000 * 60 * 60 * 24);
-      return diffDays <= filterDays && diffDays >= 0;
-    });
-
-    let hadir = 0;
-    let izin = 0;
-    let sakit = 0;
-    let alpa = 0;
-
-    filteredAttendance.forEach(item => {
-      if (item.type === 'DATANG' || item.status.toLowerCase().includes('hadir') || item.status.toLowerCase().includes('masuk')) {
-        hadir++;
-      } else if (item.type === 'IZIN') {
-        izin++;
-      } else if (item.type === 'SAKIT') {
-        sakit++;
-      } else {
-        alpa++;
+      try {
+        const itemTime = new Date(item.date).getTime();
+        if (isNaN(itemTime)) return true;
+        const diffDays = (now.getTime() - itemTime) / (1000 * 60 * 60 * 24);
+        return diffDays <= filterDays && diffDays >= -1;
+      } catch (e) {
+        return true;
       }
     });
 
-    // Default simulation baseline if history is just starting
-    if (filteredAttendance.length === 0) {
-      hadir = period === 'week' ? 5 : 20;
-      izin = 1;
-      sakit = 0;
-      alpa = 0;
+    let hadirCount = 0;
+    let izinCount = 0;
+    let sakitCount = 0;
+    let alpaCount = 0;
+
+    // Track unique dates to prevent duplicate counts on same day
+    const countedDates = new Set<string>();
+
+    filteredAttendance.forEach(item => {
+      const type = (item.type || '').toUpperCase();
+      const status = (item.status || '').toLowerCase();
+      const key = `${item.date}_${type}`;
+
+      if (!countedDates.has(key)) {
+        countedDates.add(key);
+
+        if (type === 'DATANG' || type === 'PULANG' || status.includes('hadir') || status.includes('datang') || status.includes('masuk')) {
+          hadirCount++;
+        } else if (type === 'IZIN' || status.includes('izin')) {
+          izinCount++;
+        } else if (type === 'SAKIT' || status.includes('sakit')) {
+          sakitCount++;
+        } else if (type === 'ALPA' || status.includes('alpa')) {
+          alpaCount++;
+        }
+      }
+    });
+
+    const totalAttendance = hadirCount + izinCount + sakitCount + alpaCount;
+    const percentageHadir = totalAttendance > 0
+      ? Math.round((hadirCount / totalAttendance) * 100)
+      : (history.length > 0 ? 100 : 0);
+
+    // 100% Real-Time Live Tasks Data
+    const totalTasks = tasks.length;
+    const completedTasks = tasks.filter(t => t.isCompleted).length;
+    const pendingTasks = totalTasks - completedTasks;
+    const percentageCompleted = totalTasks > 0
+      ? Math.round((completedTasks / totalTasks) * 100)
+      : (tasks.length === 0 ? 100 : 0);
+
+    // Calculate Real Productivity Score
+    let weeklyProductivityScore = 100;
+    if (totalAttendance > 0 && totalTasks > 0) {
+      weeklyProductivityScore = Math.round((percentageHadir * 0.5) + (percentageCompleted * 0.5));
+    } else if (totalAttendance > 0) {
+      weeklyProductivityScore = percentageHadir;
+    } else if (totalTasks > 0) {
+      weeklyProductivityScore = percentageCompleted;
     }
 
-    const totalAttendance = hadir + izin + sakit + alpa;
-    const percentageHadir = totalAttendance > 0 ? Math.round((hadir / totalAttendance) * 100) : 100;
-
-    // Task stats
-    const totalTasks = tasks.length > 0 ? tasks.length : 6;
-    const completedTasks = tasks.length > 0 ? tasks.filter(t => t.isCompleted).length : 5;
-    const pendingTasks = totalTasks - completedTasks;
-    const percentageCompleted = Math.round((completedTasks / totalTasks) * 100);
-
-    const weeklyProductivityScore = Math.round((percentageHadir * 0.5) + (percentageCompleted * 0.5));
-
-    let summaryText = 'Perkembangan belajar Anda sangat konsisten dan memuaskan! Pertahankan kehadiran dan kedisiplinan pengumpulan tugas sekolah.';
-    if (weeklyProductivityScore < 75) {
-      summaryText = 'Tingkatkan lagi penyelesaian tugas sekolah sebelum tenggat waktu dan pastikan presensi selalu tepat waktu.';
+    // Dynamic Intelligent Feedback
+    let summaryText = '';
+    if (totalAttendance === 0 && totalTasks === 0) {
+      summaryText = 'Belum ada catatan presensi atau tugas yang terekam untuk periode ini. Mulai lakukan presensi harian atau tambahkan tugas sekolah untuk melihat grafik produktivitas Anda.';
+    } else if (weeklyProductivityScore >= 85) {
+      summaryText = `Luar biasa, ${studentName}! Disiplin kehadiran dan penyelesaian tugas Anda berada pada tingkat prima (${weeklyProductivityScore}%). Pertahankan performa ini!`;
+    } else if (weeklyProductivityScore >= 65) {
+      summaryText = `Performa belajar Anda cukup baik (${weeklyProductivityScore}%). Selesaikan ${pendingTasks} tugas yang masih tertunda untuk meningkatkan nilai kedisiplinan.`;
+    } else {
+      summaryText = `Perhatian! Ada ${pendingTasks} tugas yang belum selesai dan ${alpaCount + izinCount + sakitCount} hari ketidakhadiran. Segera selesaikan tugas sebelum tenggat waktu.`;
     }
 
     return {
@@ -98,10 +128,10 @@ export const ReportService = {
       className,
       periodLabel: period === 'week' ? '1 Minggu Terakhir' : '1 Bulan Terakhir',
       attendanceStats: {
-        hadir,
-        izin,
-        sakit,
-        alpa,
+        hadir: hadirCount,
+        izin: izinCount,
+        sakit: sakitCount,
+        alpa: alpaCount,
         total: totalAttendance,
         percentageHadir,
       },
@@ -113,9 +143,12 @@ export const ReportService = {
       },
       weeklyProductivityScore,
       summaryText,
+      recentAttendance: filteredAttendance.slice(0, 10),
+      recentTasks: tasks.slice(0, 10),
     };
   },
 
+  // 2. Generate Beautiful HTML Report for PDF Export
   generateHTMLReport(insight: InsightData): string {
     const todayStr = new Date().toLocaleDateString('id-ID', {
       weekday: 'long',
@@ -123,6 +156,38 @@ export const ReportService = {
       month: 'long',
       day: 'numeric',
     });
+
+    const attendanceRows = insight.recentAttendance.length > 0
+      ? insight.recentAttendance
+          .map(
+            (r, i) => `
+          <tr>
+            <td style="text-align: center;">${i + 1}</td>
+            <td><strong>${r.date}</strong></td>
+            <td>${r.time} WIB</td>
+            <td><span class="badge badge-${(r.type || 'hadir').toLowerCase()}">${r.type || 'HADIR'}</span></td>
+            <td>${r.locationName || 'SMK Telkom Purwokerto'}</td>
+            <td>${r.status}</td>
+          </tr>`
+          )
+          .join('')
+      : `<tr><td colspan="6" style="text-align: center; color: #94A3B8; padding: 16px;">Belum ada riwayat presensi yang tercatat.</td></tr>`;
+
+    const taskRows = insight.recentTasks.length > 0
+      ? insight.recentTasks
+          .map(
+            (t, i) => `
+          <tr>
+            <td style="text-align: center;">${i + 1}</td>
+            <td><strong>${t.title}</strong></td>
+            <td>${t.subject}</td>
+            <td>${t.deadlineDate} (${t.deadlineTime})</td>
+            <td><span class="badge badge-${t.isCompleted ? 'hadir' : 'alpa'}">${t.isCompleted ? 'SELESAI' : 'PENDING'}</span></td>
+            <td>${t.attachedFileName ? '📎 ' + t.attachedFileName : '-'}</td>
+          </tr>`
+          )
+          .join('')
+      : `<tr><td colspan="6" style="text-align: center; color: #94A3B8; padding: 16px;">Belum ada catatan tugas yang ditambahkan.</td></tr>`;
 
     return `
 <!DOCTYPE html>
@@ -142,346 +207,295 @@ export const ReportService = {
       border-bottom: 3px solid #D90000;
       padding-bottom: 12px;
       margin-bottom: 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
     }
-    .brand-title {
-      font-size: 20px;
-      font-weight: bold;
+    .header h1 {
       color: #D90000;
+      font-size: 22px;
       margin: 0;
-    }
-    .brand-sub {
-      font-size: 11px;
-      color: #64748B;
-      margin: 2px 0 0 0;
-    }
-    .doc-date {
-      font-size: 10px;
-      color: #94A3B8;
-      text-align: right;
-    }
-    .profile-box {
-      background-color: #F8FAFC;
-      border: 1px solid #E2E8F0;
-      border-radius: 8px;
-      padding: 12px 16px;
-      margin-bottom: 20px;
-    }
-    .profile-title {
-      font-size: 14px;
-      font-weight: bold;
-      color: #0F172A;
-      margin: 0 0 4px 0;
-    }
-    .profile-meta {
-      font-size: 11px;
-      color: #475569;
-      margin: 0;
-    }
-    .section-title {
-      font-size: 13px;
-      font-weight: bold;
-      color: #D90000;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      margin: 18px 0 8px 0;
-      border-left: 3px solid #D90000;
-      padding-left: 8px;
+    }
+    .header p {
+      color: #64748B;
+      font-size: 12px;
+      margin: 4px 0 0 0;
+    }
+    .info-card {
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .info-item {
+      font-size: 12px;
+    }
+    .info-item strong {
+      color: #0F172A;
+      display: block;
+      font-size: 14px;
+      margin-top: 2px;
     }
     .grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
-      margin-bottom: 16px;
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
     }
     .stat-card {
-      background-color: #FFFFFF;
+      flex: 1;
+      background: #FFFFFF;
       border: 1px solid #E2E8F0;
-      border-radius: 8px;
-      padding: 10px;
+      border-radius: 10px;
+      padding: 12px;
       text-align: center;
     }
     .stat-val {
-      font-size: 20px;
+      font-size: 24px;
       font-weight: bold;
-      color: #0F172A;
-      margin: 0;
+      margin-top: 4px;
     }
+    .stat-hadir { color: #16A34A; }
+    .stat-izin { color: #0284C7; }
+    .stat-sakit { color: #EA580C; }
+    .stat-alpa { color: #DC2626; }
+    .stat-score { color: #7C3AED; }
     .stat-label {
-      font-size: 9px;
+      font-size: 11px;
       color: #64748B;
       text-transform: uppercase;
-      margin-top: 2px;
+      font-weight: 600;
     }
-    .progress-bar-bg {
-      background-color: #E2E8F0;
-      border-radius: 6px;
-      height: 10px;
-      overflow: hidden;
-      margin: 6px 0;
+    .section-title {
+      font-size: 14px;
+      font-weight: bold;
+      color: #0F172A;
+      margin: 20px 0 8px 0;
+      border-left: 4px solid #D90000;
+      padding-left: 8px;
     }
-    .progress-bar-fill {
-      background-color: #D90000;
-      height: 100%;
-      border-radius: 6px;
-    }
-    .table {
+    table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 8px;
       font-size: 11px;
+      margin-bottom: 16px;
     }
-    .table th {
+    th {
       background-color: #F1F5F9;
-      color: #334155;
+      color: #475569;
       text-align: left;
       padding: 8px;
       border: 1px solid #CBD5E1;
+      font-weight: bold;
     }
-    .table td {
+    td {
       padding: 8px;
       border: 1px solid #E2E8F0;
+      color: #334155;
     }
-    .badge-green { color: #059669; font-weight: bold; }
-    .badge-orange { color: #D97706; font-weight: bold; }
-    .badge-blue { color: #2563EB; font-weight: bold; }
-    .badge-red { color: #DC2626; font-weight: bold; }
+    tr:nth-child(even) {
+      background-color: #F8FAFC;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-weight: bold;
+      font-size: 9px;
+      text-transform: uppercase;
+    }
+    .badge-datang, .badge-hadir { background: #DCFCE7; color: #166534; }
+    .badge-izin { background: #E0F2FE; color: #0369A1; }
+    .badge-sakit { background: #FFEDD5; color: #C2410C; }
+    .badge-alpa { background: #FEE2E2; color: #991B1B; }
+    .badge-pulang { background: #F3E8FF; color: #6B21A8; }
     .footer {
       margin-top: 30px;
-      border-top: 1px solid #E2E8F0;
-      padding-top: 12px;
-      font-size: 9px;
-      color: #94A3B8;
+      padding-top: 10px;
+      border-top: 1px dashed #CBD5E1;
       display: flex;
       justify-content: space-between;
+      font-size: 10px;
+      color: #94A3B8;
     }
   </style>
 </head>
 <body>
   <div class="header">
-    <div>
-      <h1 class="brand-title">IDHAM SCHEDULE • REPORT</h1>
-      <p class="brand-sub">SMK Telkom Purwokerto — Evaluasi Presensi & Perkembangan Belajar</p>
-    </div>
-    <div class="doc-date">
-      <strong>Periode: ${insight.periodLabel}</strong><br>
-      Dicetak: ${todayStr}
-    </div>
+    <h1>Laporan Evaluasi & Presensi Belajar Siswa</h1>
+    <p>SMK TELKOM PURWOKERTO • IDHAM SCHEDULE SYSTEM • Dicetak: ${todayStr}</p>
   </div>
 
-  <div class="profile-box">
-    <h2 class="profile-title">${insight.studentName}</h2>
-    <p class="profile-meta">Kelas: <strong>${insight.className}</strong> | Status: <strong>Siswa Aktif</strong> | Skor Produktivitas: <strong style="color:#D90000;">${insight.weeklyProductivityScore}%</strong></p>
+  <div class="info-card">
+    <div class="info-item">Nama Siswa:<strong>${insight.studentName}</strong></div>
+    <div class="info-item">Kelas:<strong>${insight.className}</strong></div>
+    <div class="info-item">Periode Laporan:<strong>${insight.periodLabel}</strong></div>
+    <div class="info-item">Skor Produktivitas:<strong style="color: #7C3AED;">${insight.weeklyProductivityScore}%</strong></div>
   </div>
 
-  <div class="section-title">1. Statistik Kehadiran & Presensi (Bulanan)</div>
   <div class="grid">
     <div class="stat-card">
-      <div class="stat-val badge-green">${insight.attendanceStats.hadir} Hari</div>
-      <div class="stat-label">Hadir / Tepat Waktu</div>
+      <div class="stat-label">Hadir</div>
+      <div class="stat-val stat-hadir">${insight.attendanceStats.hadir}</div>
     </div>
     <div class="stat-card">
-      <div class="stat-val badge-blue">${insight.attendanceStats.izin} Hari</div>
       <div class="stat-label">Izin</div>
+      <div class="stat-val stat-izin">${insight.attendanceStats.izin}</div>
     </div>
     <div class="stat-card">
-      <div class="stat-val badge-orange">${insight.attendanceStats.sakit} Hari</div>
       <div class="stat-label">Sakit</div>
+      <div class="stat-val stat-sakit">${insight.attendanceStats.sakit}</div>
     </div>
     <div class="stat-card">
-      <div class="stat-val badge-red">${insight.attendanceStats.alpa} Hari</div>
-      <div class="stat-label">Alpa / Tanpa Ket.</div>
+      <div class="stat-label">Alpa</div>
+      <div class="stat-val stat-alpa">${insight.attendanceStats.alpa}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Tugas Selesai</div>
+      <div class="stat-val stat-score">${insight.taskStats.completed}/${insight.taskStats.total}</div>
     </div>
   </div>
 
-  <p style="font-size: 11px; margin: 4px 0;">Persentase Tingkat Kehadiran: <strong>${insight.attendanceStats.percentageHadir}%</strong></p>
-  <div class="progress-bar-bg">
-    <div class="progress-bar-fill" style="width: ${insight.attendanceStats.percentageHadir}%;"></div>
+  <div style="background: #FEF2F2; border-left: 4px solid #D90000; padding: 10px 14px; border-radius: 6px; font-size: 11px; color: #991B1B; margin-bottom: 20px;">
+    <strong>Evaluasi Guru & Sistem AI:</strong> ${insight.summaryText}
   </div>
 
-  <div class="section-title">2. Perkembangan Penyelesaian Tugas & PR Sekolah</div>
-  <table class="table">
+  <div class="section-title">Riwayat Log Presensi (${insight.periodLabel})</div>
+  <table>
     <thead>
       <tr>
-        <th>Kategori Metrik</th>
-        <th>Jumlah</th>
-        <th>Persentase</th>
-        <th>Status Evaluasi</th>
+        <th style="width: 30px; text-align: center;">No</th>
+        <th>Tanggal</th>
+        <th>Jam</th>
+        <th>Jenis</th>
+        <th>Lokasi Presensi</th>
+        <th>Keterangan</th>
       </tr>
     </thead>
     <tbody>
-      <tr>
-        <td>Tugas Tuntas / Selesai</td>
-        <td><strong>${insight.taskStats.completed} Tugas</strong></td>
-        <td><strong>${insight.taskStats.percentageCompleted}%</strong></td>
-        <td><span class="badge-green">Tuntas Tepat Waktu ✓</span></td>
-      </tr>
-      <tr>
-        <td>Tugas Dalam Proses / Pending</td>
-        <td><strong>${insight.taskStats.pending} Tugas</strong></td>
-        <td><strong>${100 - insight.taskStats.percentageCompleted}%</strong></td>
-        <td><span class="badge-orange">Perlu Diselesaikan Segera</span></td>
-      </tr>
-      <tr>
-        <td>Total Tugas Periode Ini</td>
-        <td><strong>${insight.taskStats.total} Tugas</strong></td>
-        <td>100%</td>
-        <td>-</td>
-      </tr>
+      ${attendanceRows}
     </tbody>
   </table>
 
-  <div class="section-title">3. Catatan & Insight Rekomendasi AI</div>
-  <div style="background-color: #FEF2F2; border: 1px solid #FCA5A5; border-radius: 8px; padding: 10px; font-size: 11px; color: #991B1B; line-height: 1.5;">
-    💡 <strong>Insight AI:</strong> ${insight.summaryText}
-  </div>
+  <div class="section-title">Daftar Status Pengumpulan Tugas & File</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 30px; text-align: center;">No</th>
+        <th>Nama Tugas</th>
+        <th>Mata Pelajaran</th>
+        <th>Tenggat Waktu</th>
+        <th>Status</th>
+        <th>Lampiran File</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${taskRows}
+    </tbody>
+  </table>
 
   <div class="footer">
-    <span>Dokumen Laporan Resmi IDHAM SCHEDULE AI Bot</span>
-    <span>SMK Telkom Purwokerto — Jurusan Pengembangan Perangkat Lunak & Gim (PPLG)</span>
+    <div>Dokumen digital resmi diterbitkan oleh aplikasi IDHAM SCHEDULE v1.0.0</div>
+    <div>Verifikasi Data: Supabase Cloud Authenticated</div>
   </div>
 </body>
 </html>
     `;
   },
 
-  // 1. Export PDF
+  // 3. Export PDF
   async exportAndSharePDF(period: 'week' | 'month' = 'month'): Promise<void> {
     try {
       const insight = await this.getInsights(period);
       const html = this.generateHTMLReport(insight);
 
-      const { uri } = await Print.printToFileAsync({
-        html,
-        base64: false,
-      });
+      if (Platform.OS === 'web') {
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(html);
+          printWindow.document.close();
+          printWindow.print();
+        }
+        return;
+      }
 
-      if (Platform.OS !== 'web' && (await Sharing.isAvailableAsync())) {
-        await Sharing.shareAsync(uri, {
-          UTI: '.pdf',
+      const { uri } = await Print.printToFileAsync({ html });
+      const newPdfPath = `${FileSystem.documentDirectory}Laporan_Insight_${insight.studentName.replace(/\s+/g, '_')}_${period}.pdf`;
+      await FileSystem.moveAsync({ from: uri, to: newPdfPath });
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(newPdfPath, {
           mimeType: 'application/pdf',
-          dialogTitle: `Laporan Perkembangan & Presensi - ${insight.studentName}.pdf`,
+          dialogTitle: 'Bagikan Laporan Insight PDF',
+          UTI: 'com.adobe.pdf',
         });
       } else {
-        Alert.alert('Laporan PDF Siap', `File PDF tersimpan di: ${uri}`);
+        Alert.alert('PDF Tersimpan! 📄', `Laporan PDF berhasil dibuat di:\n${newPdfPath}`);
       }
-    } catch (e) {
-      console.error('PDF Export error:', e);
-      Alert.alert('Error', 'Gagal membuat file laporan PDF.');
+    } catch (e: any) {
+      console.log('Error exporting PDF:', e);
+      Alert.alert('Gagal Ekspor PDF', e.message || 'Terjadi kendala.');
     }
   },
 
-  // 2. Export Excel / CSV Spreadsheet (All User Activity & Inputs During Login)
+  // 4. Export Live Excel CSV
   async exportAndShareExcel(): Promise<void> {
     try {
-      const profile = await CloudSyncService.getLocalProfile();
-      const attendance = await AttendanceService.getHistory();
+      const history = await AttendanceService.getHistory();
       const tasks = await StorageService.getTasks();
       const meetings = await StorageService.getMeetings();
-      const overrides = await StorageService.getOverrides();
-      const knowledge = await KnowledgeService.getAllDocuments();
+      const profile = await CloudSyncService.getCurrentUser();
 
-      const studentName = profile?.fullName || 'Idham Baihaqi';
-      const studentEmail = profile?.email || 'idham@example.com';
-      const studentClass = profile?.className || 'XII PPLG 3';
-      const exportTime = new Date().toLocaleString('id-ID');
+      let csv = `REKAPITULASI DATA BELAJAR & PRESENSI SISWA\n`;
+      csv += `Nama Siswa,"${profile?.fullName || 'Idham Baihaqi'}"\n`;
+      csv += `Kelas,"${profile?.className || 'XII PPLG 3'}"\n`;
+      csv += `Waktu Ekspor,"${new Date().toLocaleString('id-ID')}"\n\n`;
 
-      // Build UTF-8 BOM CSV Excel format with semicolon delimiter
-      let csvContent = '\uFEFF';
+      csv += `--- RIWAYAT PRESENSI MASUK / PULANG / IZIN / SAKIT ---\n`;
+      csv += `No,Tanggal,Waktu,Jenis,Status,Titik Lokasi,Latitude,Longitude\n`;
+      history.forEach((h, i) => {
+        csv += `${i + 1},"${h.date}","${h.time}","${h.type}","${h.status}","${h.locationName || 'SMK Telkom Purwokerto'}",${h.latitude || ''},${h.longitude || ''}\n`;
+      });
 
-      // Header Sheet Info
-      csvContent += `REKAPITULASI AKTIVITAS & INPUT DATA IDHAM SCHEDULE\n`;
-      csvContent += `Siswa;${studentName}\n`;
-      csvContent += `Email Akun;${studentEmail}\n`;
-      csvContent += `Kelas;${studentClass}\n`;
-      csvContent += `Waktu Ekspor;${exportTime}\n`;
-      csvContent += `Aplikasi;IDHAM SCHEDULE - SMK Telkom Purwokerto\n\n`;
+      csv += `\n--- DAFTAR TUGAS & DEADLINE ---\n`;
+      csv += `No,Judul Tugas,Mata Pelajaran,Tenggat Tanggal,Tenggat Jam,Status,File Lampiran\n`;
+      tasks.forEach((t, i) => {
+        csv += `${i + 1},"${t.title}","${t.subject}","${t.deadlineDate}","${t.deadlineTime}","${t.isCompleted ? 'SELESAI' : 'PENDING'}","${t.attachedFileName || '-'}"\n`;
+      });
 
-      // SECTION 1: PRESENSI & KEHADIRAN
-      csvContent += `[ 1. REKAP RIWAYAT PRESENSI & ABSENSI SISWA ]\n`;
-      csvContent += `No;Tanggal;Waktu (WIB);Tipe Presensi;Status;Nama Lokasi;Latitude;Longitude;Target Siswa;NIS;QR Embedded\n`;
-      if (attendance.length === 0) {
-        csvContent += `1;${new Date().toISOString().split('T')[0]};07:00;DATANG;Hadir Tepat Waktu;SMK Telkom Purwokerto;-7.433924;109.248612;${studentName};541221001;Ya\n`;
-      } else {
-        attendance.forEach((att, idx) => {
-          csvContent += `${idx + 1};${att.date};${att.time};${att.type};${att.status};"${att.locationName}";${att.latitude};${att.longitude};"${att.studentName}";${att.studentNis};${att.qrPayload ? 'Ya' : 'Tidak'}\n`;
-        });
-      }
-      csvContent += `\n`;
+      csv += `\n--- AGENDA JANJI TEMU & MEETING ---\n`;
+      csv += `No,Agenda,Tanggal,Waktu,Lokasi,Status\n`;
+      meetings.forEach((m, i) => {
+        csv += `${i + 1},"${m.title}","${m.date}","${m.time}","${m.location}","${m.isCompleted ? 'SELESAI' : 'MENDATANG'}"\n`;
+      });
 
-      // SECTION 2: TUGAS SEKOLAH & PR
-      csvContent += `[ 2. REKAP INPUT TUGAS SEKOLAH & DEADLINE ]\n`;
-      csvContent += `No;Judul Tugas;Mata Pelajaran;Deadline Tanggal;Deadline Jam;Status;Lampiran File;Tanggal Ditambahkan\n`;
-      if (tasks.length === 0) {
-        csvContent += `1;Tugas Proyek PPLG;Konsentrasi Kejuruan;${new Date().toISOString().split('T')[0]};23:59;Selesai;modul.pdf;${new Date().toISOString().split('T')[0]}\n`;
-      } else {
-        tasks.forEach((t, idx) => {
-          const status = t.isCompleted ? 'Selesai' : 'Belum Selesai (Pending)';
-          const file = t.attachedFileName || '-';
-          csvContent += `${idx + 1};"${t.title}";"${t.subject}";${t.deadlineDate};${t.deadlineTime};${status};"${file}";${t.createdAt.split('T')[0]}\n`;
-        });
-      }
-      csvContent += `\n`;
-
-      // SECTION 3: AGENDA & MEETING
-      csvContent += `[ 3. REKAP INPUT AGENDA & JANJI MEETING ]\n`;
-      csvContent += `No;Judul Agenda / Meeting;Tanggal;Waktu (WIB);Lokasi;Catatan;Status\n`;
-      if (meetings.length === 0) {
-        csvContent += `1;Rapat Divisi IT OSIS;${new Date().toISOString().split('T')[0]};14:00;Lab RPL;-;Selesai\n`;
-      } else {
-        meetings.forEach((m, idx) => {
-          const status = m.isCompleted ? 'Selesai' : 'Mendatang';
-          csvContent += `${idx + 1};"${m.title}";${m.date};${m.time};"${m.location}";"${m.notes || '-'}";${status}\n`;
-        });
-      }
-      csvContent += `\n`;
-
-      // SECTION 4: PERUBAHAN JADWAL SEMENTARA (OVERRIDES)
-      csvContent += `[ 4. REKAP PERUBAHAN JADWAL SEMENTARA (OVERRIDES) ]\n`;
-      csvContent += `No;Hari;Jam Ke;Kelas;Kode Mapel;Nama Mapel Baru;Ruangan Baru\n`;
-      if (overrides.length === 0) {
-        csvContent += `1;SENIN;Jam ke-1;XII PPLG 3;MP1-C;Konsentrasi Kejuruan;Lab RPL\n`;
-      } else {
-        overrides.forEach((o, idx) => {
-          csvContent += `${idx + 1};${o.day.toUpperCase()};Jam ke-${o.period};${o.className};${o.newSubjectCode || '-'};"${o.newSubjectName || '-'}";"${o.newRoom || '-'}"\n`;
-        });
-      }
-      csvContent += `\n`;
-
-      // SECTION 5: MATERI & DOKUMEN PEMBELAJARAN AI
-      csvContent += `[ 5. DOKUMEN & MATERI TERPELAJARI BOT ]\n`;
-      csvContent += `No;Judul Materi;Nama File Sumber;Ringkasan Isi;Tanggal Unggah\n`;
-      if (knowledge.length === 0) {
-        csvContent += `1;Modul PPLG;modul_pplg.pdf;Materi dasar pengembangan aplikasi mobile dan web.;${new Date().toISOString().split('T')[0]}\n`;
-      } else {
-        knowledge.forEach((k, idx) => {
-          const summary = (k.summary || k.textContent || '-').replace(/"/g, '""').slice(0, 100);
-          csvContent += `${idx + 1};"${k.title}";"${k.fileName}";"${summary}";${k.createdAt.split('T')[0]}\n`;
-        });
+      if (Platform.OS === 'web') {
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Rekap_Aktivitas_${(profile?.fullName || 'Idham').replace(/\s+/g, '_')}.csv`;
+        a.click();
+        return;
       }
 
-      // Save file to cache
-      const filename = `Rekap_Aktivitas_${studentName.replace(/\s+/g, '_')}.csv`;
-      const fileUri = `${FileSystem.cacheDirectory}${filename}`;
-
-      await FileSystem.writeAsStringAsync(fileUri, csvContent, {
+      const filePath = `${FileSystem.documentDirectory}Rekap_Aktivitas_Excel_${Date.now()}.csv`;
+      await FileSystem.writeAsStringAsync(filePath, csv, {
         encoding: FileSystem.EncodingType.UTF8,
       });
 
-      if (Platform.OS !== 'web' && (await Sharing.isAvailableAsync())) {
-        await Sharing.shareAsync(fileUri, {
-          UTI: 'public.comma-separated-values-text',
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(filePath, {
           mimeType: 'text/csv',
-          dialogTitle: `Ekspor Excel Aktivitas Siswa - ${filename}`,
+          dialogTitle: 'Unduh Rekap Excel (.csv)',
         });
       } else {
-        Alert.alert('File Excel Siap 📊', `File tersimpan di: ${fileUri}`);
+        Alert.alert('Excel Berhasil Disimpan 📗', `Berkas tersimpan di ${filePath}`);
       }
-    } catch (err) {
-      console.error('Excel export error:', err);
-      Alert.alert('Error', 'Gagal membuat file Excel/CSV rekap aktivitas.');
+    } catch (e: any) {
+      console.log('Error export excel:', e);
+      Alert.alert('Gagal Ekspor Excel', e.message || 'Terjadi kesalahan.');
     }
   },
 };

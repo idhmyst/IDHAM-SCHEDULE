@@ -109,7 +109,7 @@ export const AttendanceScreen: React.FC<AttendanceScreenProps> = ({
     }
   };
 
-  const handleSubmitPresence = async (type: 'DATANG' | 'PULANG') => {
+  const handleSubmitPresence = async (type: 'DATANG' | 'PULANG' | 'IZIN' | 'SAKIT') => {
     if (!selectedLoc) {
       Alert.alert('Pilih Lokasi', 'Silakan tentukan titik lokasi presensi terlebih dahulu.');
       return;
@@ -484,6 +484,29 @@ export const AttendanceScreen: React.FC<AttendanceScreenProps> = ({
                     <Text style={styles.actionBtnSubtext}>
                       {selectedFriend ? `Untuk ${selectedFriend.name}` : 'Presensi Pulang'}
                     </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Quick Izin / Sakit Recording Row */}
+                <View style={styles.permissionButtonsRow}>
+                  <TouchableOpacity
+                    style={[styles.permBtn, styles.izinBtn]}
+                    onPress={() => handleSubmitPresence('IZIN')}
+                    disabled={loading}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.permBtnIcon}>🔵</Text>
+                    <Text style={styles.permBtnText}>Catat Izin</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.permBtn, styles.sakitBtn]}
+                    onPress={() => handleSubmitPresence('SAKIT')}
+                    disabled={loading}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.permBtnIcon}>🟠</Text>
+                    <Text style={styles.permBtnText}>Catat Sakit</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -1107,6 +1130,38 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: 'bold',
     fontSize: 12,
+  },
+  permissionButtonsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  permBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+    borderWidth: 1,
+  },
+  izinBtn: {
+    backgroundColor: '#E0F2FE',
+    borderColor: '#7DD3FC',
+  },
+  sakitBtn: {
+    backgroundColor: '#FFEDD5',
+    borderColor: '#FDBA74',
+  },
+  permBtnIcon: {
+    fontSize: 14,
+  },
+  permBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   loginCard: {
     backgroundColor: COLORS.white,

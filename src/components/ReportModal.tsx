@@ -194,6 +194,59 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                   <Text style={styles.aiIcon}>💡</Text>
                   <Text style={styles.aiText}>{insight.summaryText}</Text>
                 </View>
+
+                {/* 4. Log Presensi Terkini Real-Time */}
+                <Text style={styles.sectionLabel}>4. Riwayat Presensi Terkini (Real-Time):</Text>
+                {insight.recentAttendance.length > 0 ? (
+                  <View style={styles.historyList}>
+                    {insight.recentAttendance.map((item, idx) => (
+                      <View key={idx} style={styles.historyItem}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.historyDate}>{item.date} • {item.time} WIB</Text>
+                          <Text style={styles.historyLoc} numberOfLines={1}>
+                            📍 {item.locationName || 'SMK Telkom Purwokerto'}
+                          </Text>
+                        </View>
+                        <View style={[
+                          styles.typeBadge,
+                          item.type === 'DATANG' ? styles.typeDatang :
+                          item.type === 'IZIN' ? styles.typeIzin :
+                          item.type === 'SAKIT' ? styles.typeSakit : styles.typePulang
+                        ]}>
+                          <Text style={styles.typeBadgeText}>{item.type || 'HADIR'}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.emptyBox}>
+                    <Text style={styles.emptyText}>Belum ada riwayat presensi yang tercatat.</Text>
+                  </View>
+                )}
+
+                {/* 5. Status Tugas Terkini Real-Time */}
+                <Text style={styles.sectionLabel}>5. Status Tugas & PR Sekolah (Real-Time):</Text>
+                {insight.recentTasks.length > 0 ? (
+                  <View style={styles.historyList}>
+                    {insight.recentTasks.map((t, idx) => (
+                      <View key={idx} style={styles.historyItem}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.taskItemTitle}>{t.title}</Text>
+                          <Text style={styles.taskItemSub}>
+                            📖 {t.subject} • Deadline: {t.deadlineDate} ({t.deadlineTime})
+                          </Text>
+                        </View>
+                        <View style={[styles.typeBadge, t.isCompleted ? styles.typeDatang : styles.typeSakit]}>
+                          <Text style={styles.typeBadgeText}>{t.isCompleted ? 'SELESAI' : 'PENDING'}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.emptyBox}>
+                    <Text style={styles.emptyText}>Belum ada tugas yang ditambahkan.</Text>
+                  </View>
+                )}
               </>
             ) : null}
           </ScrollView>
@@ -524,5 +577,71 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontWeight: '600',
     fontSize: 11,
+  },
+  historyList: {
+    gap: 6,
+  },
+  historyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.background,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  historyDate: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: COLORS.textDark,
+  },
+  historyLoc: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  taskItemTitle: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: COLORS.textDark,
+  },
+  taskItemSub: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  typeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  typeDatang: {
+    backgroundColor: '#DCFCE7',
+  },
+  typeIzin: {
+    backgroundColor: '#E0F2FE',
+  },
+  typeSakit: {
+    backgroundColor: '#FFEDD5',
+  },
+  typePulang: {
+    backgroundColor: '#F3E8FF',
+  },
+  typeBadgeText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#0F172A',
+  },
+  emptyBox: {
+    backgroundColor: COLORS.background,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontStyle: 'italic',
   },
 });

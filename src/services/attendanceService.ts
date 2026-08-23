@@ -335,9 +335,9 @@ export const AttendanceService = {
     }
   },
 
-  // Submit Presence
+  // Submit Presence (Datang / Pulang / Izin / Sakit)
   async submitPresence(
-    type: 'DATANG' | 'PULANG',
+    type: 'DATANG' | 'PULANG' | 'IZIN' | 'SAKIT',
     location: SavedLocation,
     targetFriend?: FriendStudent,
     qrData?: QRCodeData | null
