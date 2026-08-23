@@ -61,7 +61,6 @@ export default function App() {
       const update = await Updates.checkForUpdateAsync();
       if (update.isAvailable) {
         await Updates.fetchUpdateAsync();
-        // Automatically reload smoothly
         await Updates.reloadAsync();
       }
     } catch (error) {
@@ -89,12 +88,9 @@ export default function App() {
           }
         };
 
-        recognition.onerror = () => {
-          // Silent restart
-        };
+        recognition.onerror = () => {};
 
         recognition.onend = () => {
-          // Re-listen in background
           try {
             if (!showVoiceModal) recognition.start();
           } catch (e) {}
@@ -186,19 +182,7 @@ export default function App() {
       <StatusBar style="light" backgroundColor={COLORS.primaryDark} />
       <View style={styles.screenContainer}>{renderCurrentScreen()}</View>
 
-      {/* Floating IDHAM AI Voice Command Trigger Button */}
-      <TouchableOpacity
-        style={styles.floatingVoiceBtn}
-        onPress={() => setShowVoiceModal(true)}
-        activeOpacity={0.85}
-      >
-        <View style={styles.floatingVoiceInner}>
-          <Text style={styles.floatingVoiceIcon}>🎙️</Text>
-          <Text style={styles.floatingVoiceLabel}>IDHAM AI</Text>
-        </View>
-      </TouchableOpacity>
-
-      {/* Ultra-Clean & Refined Bottom Navigation Bar */}
+      {/* Ultra-Clean Bottom Navigation Bar with Center Elevated IDHAM AI Orb */}
       <SafeAreaView style={styles.bottomNavSafe}>
         <View style={styles.bottomNav}>
           {/* Tab 1: Bot Chat */}
@@ -229,7 +213,19 @@ export default function App() {
             </Text>
           </TouchableOpacity>
 
-          {/* Tab 3: 📍 Absensi Mandiri Digits Telkom */}
+          {/* Center Elevated IDHAM AI Action Button */}
+          <TouchableOpacity
+            style={styles.centerAiContainer}
+            onPress={() => setShowVoiceModal(true)}
+            activeOpacity={0.85}
+          >
+            <View style={styles.centerAiOrb}>
+              <Text style={styles.centerAiIcon}>🎙️</Text>
+            </View>
+            <Text style={styles.centerAiLabel}>IDHAM AI</Text>
+          </TouchableOpacity>
+
+          {/* Tab 3: Absensi Mandiri Digits Telkom */}
           <TouchableOpacity
             style={[styles.navItem, activeTab === 'attendance' && styles.activeNavItem]}
             onPress={() => setActiveTab('attendance')}
@@ -256,20 +252,6 @@ export default function App() {
               Tugas
             </Text>
           </TouchableOpacity>
-
-          {/* Tab 5: Setelan */}
-          <TouchableOpacity
-            style={[styles.navItem, activeTab === 'settings' && styles.activeNavItem]}
-            onPress={() => setActiveTab('settings')}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.iconWrapper, activeTab === 'settings' && styles.activeIconWrapper]}>
-              <Text style={styles.navIcon}>⚙️</Text>
-            </View>
-            <Text style={[styles.navLabel, activeTab === 'settings' && styles.activeNavLabel]}>
-              Setelan
-            </Text>
-          </TouchableOpacity>
         </View>
       </SafeAreaView>
 
@@ -292,37 +274,6 @@ const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
   },
-  floatingVoiceBtn: {
-    position: 'absolute',
-    bottom: 72,
-    right: 16,
-    zIndex: 99,
-    elevation: 8,
-    shadowColor: '#E11D48',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-  },
-  floatingVoiceInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0F172A',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    borderColor: '#F43F5E',
-    gap: 6,
-  },
-  floatingVoiceIcon: {
-    fontSize: 15,
-  },
-  floatingVoiceLabel: {
-    color: '#FDA4AF',
-    fontSize: 11,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-  },
   bottomNavSafe: {
     backgroundColor: COLORS.white,
     borderTopWidth: 1,
@@ -335,11 +286,11 @@ const styles = StyleSheet.create({
   },
   bottomNav: {
     flexDirection: 'row',
-    height: 58,
+    height: 60,
     backgroundColor: COLORS.white,
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingHorizontal: 4,
+    paddingHorizontal: 6,
   },
   navItem: {
     flex: 1,
@@ -374,5 +325,36 @@ const styles = StyleSheet.create({
   activeNavLabel: {
     color: COLORS.primary,
     fontWeight: 'bold',
+  },
+  centerAiContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    top: -14,
+    marginHorizontal: 4,
+  },
+  centerAiOrb: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#0F172A',
+    borderWidth: 2,
+    borderColor: '#F43F5E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+    shadowColor: '#E11D48',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+  },
+  centerAiIcon: {
+    fontSize: 20,
+  },
+  centerAiLabel: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#E11D48',
+    marginTop: 2,
+    letterSpacing: 0.3,
   },
 });

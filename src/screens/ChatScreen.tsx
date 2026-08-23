@@ -314,11 +314,21 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
             returnKeyType="send"
           />
 
+          {/* IDHAM AI Voice Trigger Button */}
+          {onVoiceAIPress && (
+            <TouchableOpacity
+              style={styles.micBtn}
+              onPress={onVoiceAIPress}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.micIcon}>🎙️</Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
             style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
             onPress={() => handleSendMessage()}
             disabled={!inputText.trim()}
-            activeOpacity={0.8}
           >
             <Text style={styles.sendIcon}>➤</Text>
           </TouchableOpacity>
@@ -443,5 +453,19 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  micBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#0F172A',
+    borderWidth: 1.5,
+    borderColor: '#F43F5E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+  },
+  micIcon: {
+    fontSize: 15,
   },
 });
